@@ -150,22 +150,12 @@ class ConfigManager:
                     self.config["symbols"][symbol]["sl_pips"] = max(1.0, float(sl))
                     
                     # Validate lot sizes: all must be > 0, default to 0.01
-                    for lot_field in ["bx_lot", "sy_lot", "sx_lot", "by_lot", "single_fire_lot"]:
+                    for lot_field in ["pair_buy_lot", "pair_sell_lot", "single_lot"]:
                         lot_val = self.config["symbols"][symbol].get(lot_field, 0.01)
                         self.config["symbols"][symbol][lot_field] = max(0.01, float(lot_val))
 
-                    # Validate single fire TP/SL pips: must be > 0
-                    for sf_field in ["single_fire_tp_pips", "single_fire_sl_pips"]:
-                        sf_val = self.config["symbols"][symbol].get(sf_field, 150.0)
-                        self.config["symbols"][symbol][sf_field] = max(1.0, float(sf_val))
-
-                    # Validate protection_distance: must be > 0
-                    prot_dist = self.config["symbols"][symbol].get("protection_distance", 100.0)
-                    self.config["symbols"][symbol]["protection_distance"] = max(1.0, float(prot_dist))
-        
-                    # Validate max_positions is multiple of 3 and capped at 18
-                    max_pos = int(sym_cfg.get("max_positions", 3))
-                    max_pos = max(3, min(MAX_POSITION_LIMIT, max_pos))
+                    # Validate max_positions is multiple of 3
+                    max_pos = int(self.config["symbols"][symbol].get("max_positions", 3))
                     if max_pos % 3 != 0:
                         raise ValueError(f"max_positions must be multiple of 3, got {max_pos}")
                     self.config["symbols"][symbol]["max_positions"] = max_pos

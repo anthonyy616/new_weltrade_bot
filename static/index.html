@@ -21,224 +21,8 @@
             }
         }
     </script>
-    <style>
-        /* Loading Spinner */
-        .loader {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3b82f6;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        /* Base Styles */
-        body {
-            background-color: #ffffff;
-            color: #0f172a;
-            transition: background-color 0.3s, color 0.3s;
-            margin: 0;
-            padding: 0;
-        }
-
-        .card {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            transition: background-color 0.3s, border-color 0.3s;
-        }
-
-        .input {
-            background-color: #ffffff;
-            border: 1px solid #cbd5e1;
-            color: #0f172a;
-            padding: 0.5rem;
-            border-radius: 0.25rem;
-            width: 100%;
-            transition: all 0.3s;
-        }
-
-        .input:focus {
-            outline: none;
-            border-color: #3b82f6;
-            width: 100%;
-        }
-
-        .text-muted {
-            color: #64748b;
-        }
-
-        .text-secondary {
-            color: #475569;
-        }
-
-        .logs-bg {
-            background-color: #f1f5f9;
-        }
-
-        .logs-text {
-            color: #16a34a;
-        }
-
-        /* Dark Mode Overrides */
-        .dark body {
-            background-color: #020617;
-            color: #f8fafc;
-        }
-
-        .dark .card {
-            background-color: #1e293b;
-            border: 1px solid #334155;
-        }
-
-        .dark .input {
-            background-color: #0f172a;
-            border: 1px solid #334155;
-            color: white;
-        }
-
-        .dark .text-muted {
-            color: #94a3b8;
-        }
-
-        .dark .text-secondary {
-            color: #cbd5e1;
-        }
-
-        .dark .logs-bg {
-            background-color: #0f172a;
-        }
-
-        .dark .logs-text {
-            color: #22c55e;
-        }
-
-        /* Buttons */
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 0.25rem;
-            font-weight: 500;
-            transition: all 0.2s;
-            cursor: pointer;
-            border: none;
-        }
-
-        .btn-primary {
-            background-color: #3b82f6;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background-color: #2563eb;
-        }
-
-        .btn-danger {
-            background-color: #ef4444;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background-color: #dc2626;
-        }
-
-        .btn-success {
-            background-color: #22c55e;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background-color: #16a34a;
-        }
-
-        .btn-theme {
-            background-color: #3b82f6;
-            color: white;
-            padding: 0.5rem 0.75rem;
-            border-radius: 0.25rem;
-            font-weight: 500;
-            font-size: 0.875rem;
-            transition: all 0.2s;
-        }
-
-        .btn-theme:hover {
-            background-color: #2563eb;
-        }
-
-        /* Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 50;
-            backdrop-filter: blur(4px);
-        }
-
-        .modal-content {
-            background-color: #ffffff;
-            padding: 2rem;
-            border-radius: 0.5rem;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .dark .modal-content {
-            background-color: #1e293b;
-            border: 1px solid #334155;
-        }
-
-        /* Mobile optimizations */
-        @media (max-width: 768px) {
-            body {
-                padding: 0.5rem;
-            }
-
-            .card {
-                padding: 0.75rem;
-            }
-
-            h1 {
-                font-size: 1.5rem !important;
-            }
-
-            .stat-value {
-                font-size: 1.5rem !important;
-            }
-
-            .btn {
-                padding: 0.5rem 0.75rem;
-                font-size: 0.875rem;
-            }
-
-            .btn-theme {
-                padding: 0.4rem 0.6rem;
-                font-size: 0.75rem;
-            }
-        }
-    </style>
+    <!-- Styles migrated to static/styles.css -->
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body
@@ -270,47 +54,50 @@
         </div>
     </div>
 
-    <div id="dashboard" class="max-w-6xl mx-auto space-y-6 hidden">
-        <div class="flex items-center justify-between">
-            <h1 class="text-2xl md:text-3xl font-bold text-blue-500">Weltrade MT5 Bot</h1>
-            <div class="flex items-center gap-3">
+    <div id="dashboard" class="max-w-6xl mx-auto space-y-4 md:space-y-6 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-blue-500">Weltrade MT5 Bot</h1>
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
                 <div id="status-badge"
-                    class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    class="flex items-center gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                     <div class="h-2 w-2 rounded-full bg-slate-400"></div> Offline
                 </div>
                 <button id="toggle-btn"
-                    class="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded"
+                    class="px-3 sm:px-4 py-1 sm:py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-medium rounded"
                     onclick="toggleBot()">Start Bot</button>
                 <button onclick="logout()"
-                    class="px-3 py-1.5 bg-red-500/10 text-red-500 text-xs font-medium rounded border border-red-500/20">Sign
-                    Out</button>
+                    class="px-2 sm:px-3 py-1 sm:py-1.5 bg-red-500/10 text-red-500 text-xs font-medium rounded border border-red-500/20">Sign Out</button>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
+            <div class="bg-white dark:bg-slate-800 p-2 sm:p-3 md:p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Live Price</div>
-                <div id="price-display" class="text-2xl font-bold mt-1 tracking-tight">---</div>
+                <div id="price-display" class="text-lg sm:text-xl md:text-2xl font-bold mt-1 tracking-tight">---</div>
             </div>
-            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div class="bg-white dark:bg-slate-800 p-2 sm:p-3 md:p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Positions</div>
-                <div class="text-2xl font-bold mt-1"><span id="pos-count">0</span> / <span id="max-pos-disp">18</span>
-                </div>
+                <div class="text-lg sm:text-xl md:text-2xl font-bold mt-1"><span id="pos-count">0</span>/<span id="max-pos-disp">3</span></div>
             </div>
-            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div class="bg-white dark:bg-slate-800 p-2 sm:p-3 md:p-4 rounded-lg border border-slate-200 dark:border-slate-700 col-span-2 sm:col-span-1">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">SESSION</div>
+                <div class="text-sm sm:text-base md:text-lg font-semibold mt-1"><span id="session-elapsed">00:00</span>/<span id="session-total">00:00</span></div>
+                <div class="text-xs text-slate-400 mt-1">Remain: <span id="session-remaining">--:--</span></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-2 sm:p-3 md:p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Pending</div>
-                <div class="text-2xl font-bold mt-1"><span id="pending-count">0</span></div>
+                <div class="text-lg sm:text-xl md:text-2xl font-bold mt-1"><span id="pending-count">0</span></div>
             </div>
-            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div class="bg-white dark:bg-slate-800 p-2 sm:p-3 md:p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Bot State</div>
-                <div id="cycle-state" class="text-xl font-bold mt-1 text-blue-400">Idle</div>
+                <div id="cycle-state" class="text-sm sm:text-base md:text-lg font-bold mt-1 text-blue-400">Idle</div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
             <div
-                class="md:col-span-1 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700 h-fit">
-                <h2 class="text-lg font-semibold mb-4 border-b pb-2 border-slate-700">Settings</h2>
+                class="lg:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 md:p-5 rounded-lg border border-slate-200 dark:border-slate-700 lg:h-fit">
+                <h2 class="text-base sm:text-lg font-semibold mb-3 border-b pb-2 border-slate-700">Settings</h2>
                 <form onsubmit="updateConfig(event)" class="space-y-4">
 
                     <div class="space-y-4">
@@ -400,7 +187,7 @@
 
                     <!-- Global Settings -->
                     <div class="p-3 border border-slate-700 rounded bg-slate-900/30">
-                        <label class="block text-xs font-bold text-slate-400 mb-2">⚙️ Global Settings</label>
+                        <label class="block text-xs font-bold text-slate-400 mb-2"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 inline-block mr-1 text-purple-500"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-1.1 1.92-1.1 2.22 0l.2.737a1 1 0 0 0 .948.738l.77-.04c1.17-.06 1.66 1.352.65 1.92l-.635.313a1 1 0 0 0-.364 1.364l.29.53c.52.95-.2 2.09-1.34 2.09h-.86a1 1 0 0 0-.94.667l-.25.66c-.35.93-1.7.93-2.05 0l-.25-.66a1 1 0 0 0-.94-.667h-.86c-1.14 0-1.86-1.14-1.34-2.09l.29-.53a1 1 0 0 0-.364-1.364L4.99 6.272c-1.01-.568-.52-1.98.65-1.92l.77.04a1 1 0 0 0 .948-.738l.2-.737z"/></svg> Global Settings</label>
                         <div class="grid grid-cols-2 gap-2">
                             <div>
                                 <label class="block text-[10px] text-gray-500 mb-0.5">Max Time (Min)</label>
@@ -411,77 +198,75 @@
                     </div>
 
                     <button type="submit"
-                        class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition hover:shadow-lg">
+                        class="w-full py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs sm:text-sm font-medium transition hover:shadow-lg">
                         Update Configuration
                     </button>
 
                     <!-- Start/Stop All Controls -->
-                    <div class="grid grid-cols-2 gap-2 mt-2">
+                    <div class="grid grid-cols-2 gap-1 sm:gap-2 mt-2">
                         <button type="button" onclick="startAllSymbols()"
-                            class="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium">
+                            class="w-full py-1.5 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded text-xs sm:text-sm font-medium">
                             Start All
                         </button>
                         <button type="button" onclick="stopAllSymbols()"
-                            class="w-full py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-medium"
+                            class="w-full py-1.5 sm:py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs sm:text-sm font-medium"
                             title="Graceful stop: completes trades to max positions first">
-                            Graceful Stop All
+                            Stop All
                         </button>
                     </div>
 
                     <!-- Terminate All (Nuclear) -->
                     <button type="button" onclick="terminateAllSymbols()"
-                        class="w-full py-2 mt-2 bg-red-800 hover:bg-red-900 text-white rounded text-sm font-bold border-2 border-red-600"
+                        class="w-full py-1.5 sm:py-2 mt-2 bg-red-800 hover:bg-red-900 text-white rounded text-xs sm:text-sm font-bold border-2 border-red-600"
                         title="NUCLEAR: Closes ALL positions immediately for ALL assets">
-                        TERMINATE ALL (Nuclear Reset)
+                        TERMINATE ALL
                     </button>
 
-                    <p class="text-[11px] text-slate-500 mt-2 p-2 bg-slate-800/50 rounded border border-slate-700">
-                        <strong>Lot Sizes:</strong> Trade #N uses Lot #N (toggle: B-S-B-S per pair).<br>
-                        <strong>Max pairs:</strong> 9 max, must be odd (1,3,5,7 and 9).
-                        <strong>Max positions:</strong> 20 max (1-20).
-                        <strong>Get session history below:</strong> Click "Refresh" to load session history.
-                        <strong>Graceful stop:</strong> Graceful stop: completes trades to max positions first.
-                        <strong>Nuclear reset:</strong> Nuclear reset: closes all positions immediately for all assets.
+                    <p class="text-xs sm:text-sm text-slate-500 mt-2 p-1.5 sm:p-2 bg-slate-800/50 rounded border border-slate-700">
+                        <strong>Lot Sizes:</strong> Pair Buy, Pair Sell, Single per asset. <strong>Max pos:</strong> Multiple of 3. <strong>Graceful stop:</strong> Waits for cycle finish. <strong>Nuclear:</strong> Closes all immediately.
                     </p>
                 </form>
             </div>
+                        <div class="p-3 border border-slate-700 rounded bg-slate-900/30">
+                            <label class="block text-xs font-bold text-slate-400 mb-2"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 inline-block mr-1 text-purple-500"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-1.1 1.92-1.1 2.22 0l.2.737a1 1 0 0 0 .948.738l.77-.04c1.17-.06 1.66 1.352.65 1.92l-.635.313a1 1 0 0 0-.364 1.364l.29.53c.52.95-.2 2.09-1.34 2.09h-.86a1 1 0 0 0-.94.667l-.25.66c-.35.93-1.7.93-2.05 0l-.25-.66a1 1 0 0 0-.94-.667h-.86c-1.14 0-1.86-1.14-1.34-2.09l.29-.53a1 1 0 0 0-.364-1.364L4.99 6.272c-1.01-.568-.52-1.98.65-1.92l.77.04a1 1 0 0 0 .948-.738l.2-.737z"/></svg> Global Settings</label>
+                            <div class="grid grid-cols-2 gap-2">
 
             <div
-                class="md:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col h-[600px]">
-                <h2 class="text-lg font-semibold mb-2">Live Terminal</h2>
+                class="lg:col-span-2 bg-white dark:bg-slate-800 p-3 sm:p-4 md:p-5 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col h-auto md:h-[400px] lg:h-[600px]">
+                <h2 class="text-base sm:text-lg font-semibold mb-2">Live Terminal</h2>
                 <div id="logs"
-                    class="flex-1 bg-slate-950 rounded p-4 font-mono text-xs overflow-y-auto text-green-400 border border-slate-800">
+                    class="flex-1 bg-slate-950 rounded p-2 sm:p-3 md:p-4 font-mono text-xs overflow-y-auto text-green-400 border border-slate-800">
                     <div>[System] Ready.</div>
                 </div>
             </div>
 
             <!-- Session History Panel -->
             <div
-                class="md:col-span-3 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700">
-                <div class="flex justify-between items-center mb-3">
-                    <h2 class="text-lg font-semibold">Session History</h2>
+                class="lg:col-span-3 bg-white dark:bg-slate-800 p-3 sm:p-4 md:p-5 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div class="flex flex-col xs:flex-row xs:justify-between xs:items-center gap-2 mb-3">
+                    <h2 class="text-base sm:text-lg font-semibold">Session History</h2>
                     <button onclick="loadHistory()"
-                        class="text-xs bg-slate-600 hover:bg-slate-700 text-white px-3 py-1 rounded">
+                        class="text-xs bg-slate-600 hover:bg-slate-700 text-white px-2 sm:px-3 py-1 rounded">
                         Refresh
                     </button>
                 </div>
-                <div id="history-list" class="space-y-2 max-h-48 overflow-y-auto">
-                    <p class="text-slate-500 text-sm text-center py-4">Click "Refresh" to load session history</p>
+                <div id="history-list" class="space-y-1 sm:space-y-2 max-h-32 sm:max-h-48 overflow-y-auto">
+                    <p class="text-slate-500 text-xs sm:text-sm text-center py-2 sm:py-4">Click "Refresh" to load session history</p>
                 </div>
             </div>
 
             <!-- Group Logs Panel -->
             <div
-                class="md:col-span-3 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700">
-                <div class="flex justify-between items-center mb-3">
-                    <h2 class="text-lg font-semibold">Group Logs</h2>
+                class="lg:col-span-3 bg-white dark:bg-slate-800 p-3 sm:p-4 md:p-5 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div class="flex flex-col xs:flex-row xs:justify-between xs:items-center gap-2 mb-3">
+                    <h2 class="text-base sm:text-lg font-semibold">Group Logs</h2>
                     <button onclick="loadGroupLogs()"
-                        class="text-xs bg-slate-600 hover:bg-slate-700 text-white px-3 py-1 rounded">
+                        class="text-xs bg-slate-600 hover:bg-slate-700 text-white px-2 sm:px-3 py-1 rounded">
                         Refresh
                     </button>
                 </div>
-                <div id="group-logs-list" class="space-y-2 max-h-48 overflow-y-auto">
-                    <p class="text-slate-500 text-sm text-center py-4">Click "Refresh" to load group logs</p>
+                <div id="group-logs-list" class="space-y-1 sm:space-y-2 max-h-32 sm:max-h-48 overflow-y-auto">
+                    <p class="text-slate-500 text-xs sm:text-sm text-center py-2 sm:py-4">Click "Refresh" to load group logs</p>
                 </div>
             </div>
         </div>
@@ -492,8 +277,16 @@
         let updateInterval = null;
         let sessionToken = null;
         let lastRunningState = false;
+        // Session timer state
         let sessionStartTs = null;
-        const MAX_POSITION_LIMIT = 18;
+        let sessionTimerInterval = null;
+
+        const ICONS = {
+            play: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 inline-block mr-1"><path d="M6.5 5.5v9l7-4.5-7-4.5z" /></svg>`,
+            stop: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 inline-block mr-1"><path d="M6 6h8v8H6z" /></svg>`,
+            gear: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 inline-block mr-1"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-1.1 1.92-1.1 2.22 0l.2.737a1 1 0 0 0 .948.738l.77-.04c1.17-.06 1.66 1.352.65 1.92l-.635.313a1 1 0 0 0-.364 1.364l.29.53c.52.95-.2 2.09-1.34 2.09h-.86a1 1 0 0 0-.94.667l-.25.66c-.35.93-1.7.93-2.05 0l-.25-.66a1 1 0 0 0-.94-.667h-.86c-1.14 0-1.86-1.14-1.34-2.09l.29-.53a1 1 0 0 0-.364-1.364L4.99 6.272c-1.01-.568-.52-1.98.65-1.92l.77.04a1 1 0 0 0 .948-.738l.2-.737z"/></svg>`,
+            chart: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 inline-block mr-1 text-purple-500"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18"/></svg>`
+        };
 
         // --- 1. UI State Helpers ---
         function setLoggedInState(session) {
@@ -502,7 +295,7 @@
             document.getElementById('dashboard').classList.remove('hidden');
             const btn = document.getElementById('login-btn');
             if (btn) btn.innerHTML = 'Sign In / Register';
-            log("✅ Authenticated.");
+            log("Authenticated.");
             loadConfig();
             startPolling();
         }
@@ -669,7 +462,7 @@
             container.innerHTML = html;
         }
 
-        // Render a single asset's accordion settings panel (Pair Strategy)
+        // Render a single asset's accordion settings panel (Grid Bounce Strategy)
         function renderAssetSettingsPanel(symbol, safeId, cfg) {
             const gridDist = cfg.grid_distance || 50;
             const tpPips = cfg.tp_pips || 150;
@@ -681,64 +474,62 @@
 
             return `
             <details class="bg-slate-800/50 rounded border border-slate-700 overflow-hidden" open>
-                <summary class="px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-slate-700/50">
-                    <span class="text-sm font-medium text-blue-400">📊 ${symbol}</span>
-                    <div class="flex items-center gap-2">
+                <summary class="px-2 sm:px-3 py-1.5 sm:py-2 cursor-pointer flex flex-col sm:flex-row sm:items-center sm:justify-between hover:bg-slate-700/50 gap-2">
+                    <span class="text-xs sm:text-sm font-medium text-blue-400">${ICONS.chart} ${symbol}</span>
+                    <div class="flex items-center gap-1 sm:gap-2">
                         <button type="button" onclick="startSymbol('${symbol}')" 
-                            class="px-2 py-0.5 text-[10px] bg-green-600 hover:bg-green-700 text-white rounded">▶ Start</button>
+                            class="px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] bg-green-600 hover:bg-green-700 text-white rounded">${ICONS.play} Start</button>
                         <button type="button" onclick="stopSymbol('${symbol}')"
-                            class="px-2 py-0.5 text-[10px] bg-red-600 hover:bg-red-700 text-white rounded">⏹ Stop</button>
+                            class="px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] bg-red-600 hover:bg-red-700 text-white rounded">${ICONS.stop} Stop</button>
                     </div>
                 </summary>
-                <div class="p-3 space-y-3 border-t border-slate-700">
+                <div class="p-2 sm:p-3 space-y-2 sm:space-y-3 border-t border-slate-700">
                     <!-- Grid Distance & TP/SL -->
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-3 gap-1 sm:gap-2">
                         <div>
-                            <label class="block text-[10px] text-gray-500">Grid Distance (pips)</label>
+                            <label class="block text-[8px] sm:text-[10px] text-gray-500">Grid Dist</label>
                             <input type="number" id="griddist_${safeId}" step="1" value="${gridDist}"
-                                class="w-full p-1.5 text-sm rounded bg-slate-900 border border-slate-600">
+                                class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-slate-900 border border-slate-600">
                         </div>
                         <div>
-                            <label class="block text-[10px] text-green-400">TP (pips)</label>
+                            <label class="block text-[8px] sm:text-[10px] text-green-400">TP (pips)</label>
                             <input type="number" id="tppips_${safeId}" step="1" value="${tpPips}"
-                                class="w-full p-1.5 text-sm rounded bg-slate-900 border border-green-700/50">
+                                class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-slate-900 border border-green-700/50">
                         </div>
                         <div>
-                            <label class="block text-[10px] text-red-400">SL (pips)</label>
+                            <label class="block text-[8px] sm:text-[10px] text-red-400">SL (pips)</label>
                             <input type="number" id="slpips_${safeId}" step="1" value="${slPips}"
-                                class="w-full p-1.5 text-sm rounded bg-slate-900 border border-red-700/50">
+                                class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-slate-900 border border-red-700/50">
                         </div>
                     </div>
                     
                     <!-- Lot Sizes -->
                     <div>
-                        <label class="block text-[10px] text-yellow-400 mb-1">Lot Sizes</label>
+                        <label class="block text-[8px] sm:text-[10px] text-yellow-400 mb-1">Lot Sizes</label>
                         <div class="grid grid-cols-3 gap-1">
                             <div>
-                                <label class="block text-[9px] text-blue-400">Pair Buy</label>
+                                <label class="block text-[7px] sm:text-[9px] text-blue-400">Buy</label>
                                 <input type="number" id="pairbuy_${safeId}" step="0.01" value="${pairBuyLot}"
-                                    class="w-full p-1 text-xs rounded bg-slate-900 border border-blue-700/50 text-center">
+                                    class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-blue-700/50 text-center">
                             </div>
                             <div>
-                                <label class="block text-[9px] text-red-400">Pair Sell</label>
+                                <label class="block text-[7px] sm:text-[9px] text-red-400">Sell</label>
                                 <input type="number" id="pairsell_${safeId}" step="0.01" value="${pairSellLot}"
-                                    class="w-full p-1 text-xs rounded bg-slate-900 border border-red-700/50 text-center">
+                                    class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-red-700/50 text-center">
                             </div>
                             <div>
-                                <label class="block text-[9px] text-purple-400">Single</label>
+                                <label class="block text-[7px] sm:text-[9px] text-purple-400">Single</label>
                                 <input type="number" id="single_${safeId}" step="0.01" value="${singleLot}"
-                                    class="w-full p-1 text-xs rounded bg-slate-900 border border-purple-700/50 text-center">
+                                    class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-purple-700/50 text-center">
                             </div>
                         </div>
                     </div>
 
                     <!-- Max Positions -->
                     <div>
-                        <label class="block text-[10px] text-orange-400 mb-1">Max Positions (must be multiple of 3)</label>
-                        <input type="number" id="maxpos_${safeId}" step="3" min="3" max="${MAX_POSITION_LIMIT}" value="${maxPos}"
-                            oninput="clampMaxPositionsInput(this)"
-                            class="w-full p-1.5 text-sm rounded bg-slate-900 border border-orange-700/50">
-                        <p class="text-[8px] text-slate-500 mt-1">Excludes initial 2 positions at center</p>
+                        <label class="block text-[8px] sm:text-[10px] text-orange-400 mb-1">Max Pos (×3)</label>
+                        <input type="number" id="maxpos_${safeId}" step="3" min="3" value="${maxPos}"
+                            class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-slate-900 border border-orange-700/50">
                     </div>
                 </div>
             </details>
@@ -813,7 +604,7 @@
 
                 payload.symbols[symbol] = { enabled: isEnabled };
 
-                // If enabled, get its settings (Pair Strategy)
+                // If enabled, get its settings (Grid Bounce Strategy)
                 if (isEnabled) {
                     payload.symbols[symbol] = {
                         enabled: true,
@@ -833,29 +624,29 @@
             const updated = await apiCall('/config', 'POST', payload);
             if (updated) {
                 currentConfig = updated;
-                log(" Configuration Updated.");
+                log("Configuration updated.");
                 renderAssetSettings();
             } else {
-                log(" Update Failed.");
+                log("Update failed.");
             }
         }
 
         // Per-symbol start/stop
         async function startSymbol(symbol) {
             const res = await apiCall(`/control/start/${encodeURIComponent(symbol)}`, 'POST');
-            if (res) log(`▶ Started: ${symbol}`);
+            if (res) log(`Started: ${symbol}`);
             fetchStatus();
         }
 
         async function stopSymbol(symbol) {
             const res = await apiCall(`/control/stop/${encodeURIComponent(symbol)}`, 'POST');
-            if (res) log(`⏹ Stopped: ${symbol}`);
+            if (res) log(`Stopped: ${symbol}`);
             fetchStatus();
         }
 
         async function startAllSymbols() {
             await apiCall('/control/start', 'POST');
-            log("▶ Started all enabled assets");
+            log("Started all enabled assets");
             fetchStatus();
         }
 
@@ -899,9 +690,9 @@
 
             // Display internal state
             const stateLabel = document.getElementById('cycle-state');
-            if (status.is_resetting) stateLabel.textContent = "♻️ Resetting...";
-            else if (status.running) stateLabel.textContent = `⚡ Active (Iteration ${status.iteration})`;
-            else stateLabel.textContent = "💤 Idle";
+            if (status.is_resetting) stateLabel.textContent = "Resetting...";
+            else if (status.running) stateLabel.textContent = `Active (Iteration ${status.iteration})`;
+            else stateLabel.textContent = "Idle";
 
             // Update Buttons
             const statusBadge = document.getElementById('status-badge');
@@ -914,7 +705,7 @@
                 toggleBtn.textContent = "Stopping...";
                 toggleBtn.className = "px-4 py-1.5 bg-yellow-600 text-white text-sm font-medium rounded cursor-not-allowed opacity-75";
                 toggleBtn.disabled = true;
-                if (lastRunningState !== 'stopping') log(" Graceful stop in progress - completing open positions...");
+                if (lastRunningState !== 'stopping') log("Graceful stop in progress - completing open positions...");
                 lastRunningState = 'stopping';
             } else if (status.running) {
                 statusBadge.innerHTML = '<div class="h-2 w-2 rounded-full bg-green-400 animate-pulse"></div> Active';
@@ -922,7 +713,7 @@
                 toggleBtn.textContent = "Stop Bot";
                 toggleBtn.className = "px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded";
                 toggleBtn.disabled = false;
-                if (lastRunningState !== true) log(` Bot Running. Step ${status.step}`);
+                if (lastRunningState !== true) log(`Bot Running. Step ${status.step}`);
                 lastRunningState = true;
             } else {
                 statusBadge.innerHTML = '<div class="h-2 w-2 rounded-full bg-slate-400"></div> Offline';
@@ -930,9 +721,11 @@
                 toggleBtn.textContent = "Start Bot";
                 toggleBtn.className = "px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded";
                 toggleBtn.disabled = false;
-                if (lastRunningState && lastRunningState !== false) log(" Bot Stopped.");
+                if (lastRunningState && lastRunningState !== false) log("Bot Stopped.");
                 lastRunningState = false;
             }
+            // Update session timer display
+            updateSessionDisplay(status);
         }
 
         async function logout() {
@@ -992,6 +785,49 @@
             logs.innerHTML = `<div class="mb-1"><span class="text-slate-500">[${time}]</span> ${msg}</div>` + logs.innerHTML;
         }
 
+        // --- Session Timer Helpers ---
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60).toString().padStart(2, '0');
+            const s = Math.floor(sec % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function updateSessionDisplay(status) {
+            const totalMinutes = (currentConfig && currentConfig.global && currentConfig.global.max_runtime_minutes) ? parseInt(currentConfig.global.max_runtime_minutes) : 0;
+            const totalSec = totalMinutes * 60;
+            document.getElementById('session-total').textContent = formatTime(totalSec);
+
+            // Persistent session start handling (localStorage)
+            const stored = localStorage.getItem('bot_session_start');
+
+            if (status.running) {
+                if (stored) {
+                    sessionStartTs = parseInt(stored, 10);
+                } else if (!sessionStartTs) {
+                    sessionStartTs = Date.now();
+                    localStorage.setItem('bot_session_start', String(sessionStartTs));
+                }
+            } else {
+                // clear persisted session when not running
+                sessionStartTs = null;
+                localStorage.removeItem('bot_session_start');
+            }
+
+            const elapsedSec = sessionStartTs ? Math.floor((Date.now() - sessionStartTs) / 1000) : 0;
+            // Cap elapsed at total to prevent overflow
+            const cappedElapsedSec = Math.min(elapsedSec, totalSec);
+            const remaining = Math.max(0, totalSec - cappedElapsedSec);
+
+            document.getElementById('session-elapsed').textContent = formatTime(cappedElapsedSec);
+            document.getElementById('session-remaining').textContent = formatTime(remaining);
+
+            // Auto-stop: if time elapsed and no active trades
+            if (status.running && totalSec > 0 && elapsedSec >= totalSec && status.open_positions === 0) {
+                log('[AUTO-STOP] Time limit reached with no active trades - stopping bot');
+                stopAllSymbols();
+            }
+        }
+
         // --- History Functions ---
         async function loadHistory() {
             const container = document.getElementById('history-list');
@@ -1041,7 +877,7 @@
             const content = await fetchText(`/history/${sessionId}`);
             if (content) {
                 const win = window.open('', '_blank', 'width=800,height=600');
-                win.document.write(`<html><head><title>Session Log</title><style>body{background:#1e293b;color:#94a3b8;font-family:monospace;padding:20px;white-space:pre-wrap;}</style></head><body>${content}</body></html>`);
+                win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Session Log</title><link rel="stylesheet" href="/static/styles.css"></head><body class="session-log">${content}</body></html>`);
             }
         }
 
@@ -1085,7 +921,7 @@
             const content = await fetchText(`/history/groups/${encodeURIComponent(filename)}`);
             if (content) {
                 const win = window.open('', '_blank', 'width=1000,height=700');
-                win.document.write(`<html><head><title>Group Log - ${filename}</title><style>body{background:#1e293b;color:#94a3b8;font-family:monospace;padding:20px;white-space:pre-wrap;}</style></head><body>${content}</body></html>`);
+                win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Group Log - ${filename}</title><link rel="stylesheet" href="/static/styles.css"></head><body class="session-log">${content}</body></html>`);
             }
         }
 

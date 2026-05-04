@@ -1,4 +1,8 @@
-from typing import Dict, List, Set, Any
+"""Strategy orchestration for grid-bounce engine."""
+
+# pyright: reportAttributeAccessIssue=false
+
+from typing import Any, Dict, List, Set
 import asyncio
 import time
 from core.engine.grid_bounce_strategy_engine import GridBounceStrategyEngine as GridStrategy
@@ -43,6 +47,10 @@ class StrategyOrchestrator:
         to_remove = current_symbols - enabled_symbols
         for sym in to_remove:
             print(f"[ORCHESTRATOR] Stopping Strategy: {sym}")
+            strategy = self.strategies.get(sym)
+            if strategy and strategy.running:
+                # Best-effort graceful stop before dropping the reference.
+                asyncio.create_task(strategy.stop())
             del self.strategies[sym]
 
         # 2. Add newly enabled symbols
@@ -90,8 +98,9 @@ class StrategyOrchestrator:
         if symbol in self.strategies:
             self.session_logger.log_button(f"Stop {symbol}")
             await self.strategies[symbol].stop()
-            del self.strategies[symbol]
-            self.active_symbols.discard(symbol)
+            if not self.strategies[symbol].running:
+                del self.strategies[symbol]
+                self.active_symbols.discard(symbol)
 
     async def terminate_symbol(self, symbol: str):
         """
@@ -124,6 +133,9 @@ class StrategyOrchestrator:
         async def safe_terminate(name, strat):
             try:
                 await strat.terminate()
+                close_fn = getattr(strat, "close", None)
+                if close_fn is not None:
+                    await close_fn()
                 return True
             except Exception as e:
                 print(f"[ERROR] Failed to terminate {name}: {e}")
@@ -175,6 +187,20 @@ class StrategyOrchestrator:
             print(f"[TERMINATE ALL] Cleaned up {count} residual positions.")
 
         print("[TERMINATE ALL] All strategies terminated (or attempted).")
+
+    async def close(self):
+        """Release any open resources held by strategies and repositories."""
+        tasks = []
+        for strategy in self.strategies.values():
+            close_fn = getattr(strategy, "close", None)
+            if close_fn is not None:
+                tasks.append(close_fn())
+
+        if tasks:
+            await asyncio.gather(*tasks)
+
+        self.strategies.clear()
+        self.active_symbols.clear()
 
     async def start_ticker(self):
         """

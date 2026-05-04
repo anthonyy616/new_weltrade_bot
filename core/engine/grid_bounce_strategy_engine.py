@@ -1,15 +1,17 @@
 from dataclasses import dataclass, field, asdict
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Optional, Tuple, List, Any
 import asyncio
 import json
 import time
 import logging
-import MetaTrader5 as mt5
+import MetaTrader5 as mt5_module
 from datetime import datetime
 
 from core.engine.activity_logger import ActivityLogger
+from core.persistence.repository import Repository
 
 logger = logging.getLogger("pair_strategy")
+mt5: Any = mt5_module
 
 
 
@@ -87,8 +89,14 @@ class GridBounceStrategyEngine:
         
         self.execution_lock = asyncio.Lock()
         self.activity_log = ActivityLogger(symbol, user_id, session_logger)
+        self.repository: Optional[Repository] = None
+        self._position_drop_detected = False
     
     # Config accessors
+    @property
+    def config(self) -> Dict[str, Any]:
+        return self.config_manager.get_symbol_config(self.symbol) or {}
+
     @property
     def grid_distance(self) -> float:
         return float(self.config.get('grid_distance', 50.0))
@@ -116,6 +124,17 @@ class GridBounceStrategyEngine:
     @property
     def sl_pips(self) -> float:
         return float(self.config.get('sl_pips', 200.0))
+
+    @property
+    def current_price(self) -> float:
+        tick = mt5.symbol_info_tick(self.symbol)
+        if tick:
+            return (tick.ask + tick.bid) / 2
+        return self.state.center_price
+
+    async def start_ticker(self):
+        """Compatibility hook for orchestrator config refreshes."""
+        return None
     
 
 #startup logic and main loop
@@ -240,6 +259,8 @@ class GridBounceStrategyEngine:
         
         # --- SINGLE LEVEL PHASE ---
         if self.state.phase == "SINGLE_LEVEL":
+            if not self.state.grid_level_1:
+                return
             center = self.state.grid_level_1.price
             
             # Check DOWN movement (center - grid_distance)
@@ -254,6 +275,9 @@ class GridBounceStrategyEngine:
         
         # --- TWO LEVELS PHASE ---
         elif self.state.phase == "TWO_LEVELS":
+            if not self.state.grid_level_1 or not self.state.grid_level_2:
+                return
+
             level_1_price = self.state.grid_level_1.price
             level_2_price = self.state.grid_level_2.price
             
@@ -285,6 +309,8 @@ class GridBounceStrategyEngine:
         3. Open 3 positions at grid_level_2: Pair BS + Single SELL
         """
         center_level = self.state.grid_level_1
+        if not center_level:
+            return
         new_price = center_level.price - self.grid_distance
         
         self.activity_log.log_info(f"Moving DOWN: Grid distance reached at {new_price:.2f}")
@@ -331,6 +357,8 @@ class GridBounceStrategyEngine:
         3. Open 3 positions at grid_level_2: Pair BS + Single BUY
         """
         center_level = self.state.grid_level_1
+        if not center_level:
+            return
         new_price = center_level.price + self.grid_distance
         
         self.activity_log.log_info(f"Moving UP: Grid distance reached at {new_price:.2f}")
@@ -451,12 +479,14 @@ class GridBounceStrategyEngine:
             direction: "UP" or "DOWN" (determines single trade direction)
         """
         target_price = grid_level.price
+        open_count = 0
         
         # Open Pair Buy
         buy_ticket, buy_entry = await self._execute_market_order(
             "buy", self.pair_buy_lot, "PairBuy", target_price
         )
         if buy_ticket:
+            open_count += 1
             grid_level.positions[buy_ticket] = {
                 'leg': 'PairBuy',
                 'direction': 'buy',
@@ -478,6 +508,7 @@ class GridBounceStrategyEngine:
             "sell", self.pair_sell_lot, "PairSell", target_price
         )
         if sell_ticket:
+            open_count += 1
             grid_level.positions[sell_ticket] = {
                 'leg': 'PairSell',
                 'direction': 'sell',
@@ -501,6 +532,7 @@ class GridBounceStrategyEngine:
                 "buy", self.single_lot, "SingleBuy", target_price
             )
             if single_ticket:
+                open_count += 1
                 grid_level.positions[single_ticket] = {
                     'leg': 'SingleBuy',
                     'direction': 'buy',
@@ -523,6 +555,7 @@ class GridBounceStrategyEngine:
                 "sell", self.single_lot, "SingleSell", target_price
             )
             if single_ticket:
+                open_count += 1
                 grid_level.positions[single_ticket] = {
                     'leg': 'SingleSell',
                     'direction': 'sell',
@@ -539,7 +572,7 @@ class GridBounceStrategyEngine:
                     single_entry + self.sl_pips, single_ticket
                 )
         
-        self.state.total_positions += 3
+        self.state.total_positions += open_count
 
     #TP/SL detection helpers (Same as old logic)
 
@@ -584,6 +617,8 @@ class GridBounceStrategyEngine:
         
         tracked_tickets = set(self.state.ticket_map.keys())
         dropped = tracked_tickets - current_tickets
+        if dropped:
+            self._position_drop_detected = True
         
         for ticket in dropped:
             info = self.state.ticket_map.get(ticket)
@@ -646,16 +681,9 @@ class GridBounceStrategyEngine:
         # If any position dropped, _check_position_drops already handled logging
         # Now we just check if total_positions decreased
         
-        # Calculate expected positions
-        expected = 2  # Initial pair at center
-        if self.state.phase == "TWO_LEVELS":
-            expected = 2 + self.state.position_counter
-        elif self.state.phase == "SINGLE_LEVEL":
-            expected = 2
-        
-        # If actual is less than expected, a position closed
-        if self.state.total_positions < expected:
+        if self._position_drop_detected:
             self.activity_log.log_info("Position closed via TP/SL - triggering nuclear reset")
+            self._position_drop_detected = False
             await self._nuclear_reset_and_restart("TP_SL_HIT", self.state.realized_pnl)
             return True
         
@@ -730,6 +758,7 @@ class GridBounceStrategyEngine:
 
     def _remove_ticket_from_all_levels(self, ticket: int):
         """Remove ticket from all grid levels and global tracking"""
+        info = self.state.ticket_map.get(ticket)
         if self.state.grid_level_1 and ticket in self.state.grid_level_1.positions:
             del self.state.grid_level_1.positions[ticket]
         if self.state.grid_level_2 and ticket in self.state.grid_level_2.positions:
@@ -738,6 +767,8 @@ class GridBounceStrategyEngine:
             del self.state.ticket_map[ticket]
         if ticket in self.state.ticket_touch_flags:
             del self.state.ticket_touch_flags[ticket]
+        if info and info.get("leg") not in {"CenterBuy", "CenterSell"} and self.state.position_counter > 0:
+            self.state.position_counter -= 1
 
 
     def _init_touch_flags(self, ticket: int):
@@ -880,6 +911,34 @@ class GridBounceStrategyEngine:
         
         return actual_ticket, actual_entry
 
+    async def save_state(self):
+        """Persist the current strategy state."""
+        if self.repository is None:
+            self.repository = Repository(self.symbol)
+            await self.repository.initialize()
+
+        metadata = json.dumps(
+            {
+                "phase": self.state.phase,
+                "center_price": self.state.center_price,
+                "grid_level_1": self.state.grid_level_1.price if self.state.grid_level_1 else 0.0,
+                "grid_level_2": self.state.grid_level_2.price if self.state.grid_level_2 else 0.0,
+                "position_counter": self.state.position_counter,
+                "total_positions": self.state.total_positions,
+                "last_move_direction": self.state.last_move_direction,
+                "realized_pnl": self.state.realized_pnl,
+            }
+        )
+
+        await self.repository.save_state(
+            phase=self.state.phase,
+            center_price=self.state.center_price,
+            iteration=self.state.cycle_count,
+            cycle_id=self.state.cycle_count,
+            anchor_price=self.state.grid_level_1.price if self.state.grid_level_1 else 0.0,
+            metadata=metadata,
+        )
+
 
     #Graceful stop and position terminate (same as old logic)
 
@@ -932,9 +991,11 @@ class GridBounceStrategyEngine:
         await self.save_state()
         print(f"[TERMINATE] {self.symbol}: Terminated completely.")
 
-    async def start_ticker(self):
-        """Compatibility hook used by the orchestrator when config changes."""
-        return
+    async def close(self):
+        """Release persistent resources held by the strategy."""
+        if self.repository is not None:
+            await self.repository.close()
+            self.repository = None
 
 
     #Status API

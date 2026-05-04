@@ -1,17 +1,17 @@
 {
     "global": {
-        "max_runtime_minutes": 0
+        "max_runtime_minutes": 5
     },
     "symbols": {
         "FX Vol 20": {
-            "enabled": false,
-            "grid_distance": 50.0,
-            "tp_pips": 150.0,
-            "sl_pips": 200.0,
+            "enabled": true,
+            "grid_distance": 30.0,
+            "tp_pips": 60.0,
+            "sl_pips": 90.0,
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3
+            "single_lot": 0.02,
+            "max_positions": 12
         },
         "FX Vol 40": {
             "enabled": false,
@@ -305,3 +305,4 @@
         }
     }
 }
+
