@@ -170,11 +170,8 @@ async def update_config(config: ConfigUpdate, bot = Depends(get_current_bot)):
             if sym_data:
                 update_data["symbols"][symbol] = sym_data
     
-    try:
-        updated = bot.config_manager.update_config(update_data)
-        return updated
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    updated = bot.config_manager.update_config(update_data)
+    return updated
 
 
 # --- Per-Symbol Control Endpoints ---
@@ -301,7 +298,7 @@ async def start_all(bot = Depends(get_current_bot)):
             await asyncio.sleep(0.5)
         
     await bot.start()
-    return {"status": "started", "symbols": bot.config_manager.get_enabled_symbols(), "db_cleaned": deleted}
+    return {"status": "started", "symbols": bot.config_manager.get_enabled_symbols()}
 
 @app.post("/control/stop")
 async def stop_all(bot = Depends(get_current_bot)):
