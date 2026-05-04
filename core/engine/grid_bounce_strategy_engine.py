@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field, asdict
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 import asyncio
 import json
 import time
@@ -78,6 +78,8 @@ class GridBounceStrategyEngine:
         self.symbol = symbol
         self.user_id = user_id
         self.session_logger = session_logger
+
+        self.current_price = 0.0
         
         self.state = StrategyState()
         self.running = False
@@ -135,6 +137,7 @@ class GridBounceStrategyEngine:
             return
         
         center = (tick.ask + tick.bid) / 2
+        self.current_price = center
         self.state.center_price = center
         
         # Initialize center as grid_level_1
@@ -205,6 +208,8 @@ class GridBounceStrategyEngine:
         
         if ask <= 0 or bid <= 0:
             return
+
+        self.current_price = (ask + bid) / 2
         
         async with self.execution_lock:
             # 1. Update touch flags FIRST (PRESERVED)
@@ -926,6 +931,10 @@ class GridBounceStrategyEngine:
         
         await self.save_state()
         print(f"[TERMINATE] {self.symbol}: Terminated completely.")
+
+    async def start_ticker(self):
+        """Compatibility hook used by the orchestrator when config changes."""
+        return
 
 
     #Status API

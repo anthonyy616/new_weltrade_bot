@@ -142,13 +142,13 @@ class StrategyOrchestrator:
         # [NUCLEAR FALLBACK] Scan entire account for ANY remaining positions and close them
         # This handles orphaned positions from symbols that are no longer in 'strategies'
         import MetaTrader5 as mt5
-        all_positions = mt5.positions_get()
+        all_positions = mt5.positions_get()  # type: ignore[attr-defined]
         if all_positions:
             print(f"[TERMINATE ALL] Found {len(all_positions)} residual positions on account. Closing (Nuclear)...")
             count = 0
             for pos in all_positions:
                 # Construct generic close request
-                tick = mt5.symbol_info_tick(pos.symbol)
+                tick = mt5.symbol_info_tick(pos.symbol)  # type: ignore[attr-defined]
                 if not tick:
                     continue
                 
@@ -167,7 +167,7 @@ class StrategyOrchestrator:
                     "comment": "Terminate-All",
                 }
                 
-                res = mt5.order_send(request)
+                res = mt5.order_send(request)  # type: ignore[attr-defined]
                 if res and res.retcode == mt5.TRADE_RETCODE_DONE:
                     count += 1
                 else:

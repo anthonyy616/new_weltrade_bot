@@ -14,6 +14,11 @@ class Repository:
         self.symbol = symbol
         self.db = None
 
+    def _conn(self):
+        if self.db is None:
+            raise RuntimeError("Repository database connection is not initialized")
+        return self.db
+
     async def initialize(self):
         """Connect and ensure schema exists."""
         self.db = await aiosqlite.connect(DB_PATH)
@@ -70,7 +75,8 @@ class Repository:
 
     async def get_state(self) -> Dict[str, Any]:
         """Load symbol-level state (phase, center_price, cycle_id, anchor_price)."""
-        async with self.db.execute(
+        db = self._conn()
+        async with db.execute(
             "SELECT * FROM symbol_state WHERE symbol = ?", (self.symbol,)
         ) as cursor:
             row = await cursor.fetchone()
@@ -81,7 +87,8 @@ class Repository:
     async def save_state(self, phase: str, center_price: float, iteration: int,
                          cycle_id: int = 0, anchor_price: float = 0.0, metadata: str = '{}'):
         """Upsert symbol state including cycle management fields."""
-        await self.db.execute(
+        db = self._conn()
+        await db.execute(
             """
             INSERT INTO symbol_state (symbol, phase, center_price, iteration, last_update_time, cycle_id, anchor_price, metadata)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -96,11 +103,12 @@ class Repository:
             """,
             (self.symbol, phase, center_price, iteration, time.time(), cycle_id, anchor_price, metadata)
         )
-        await self.db.commit()
+        await db.commit()
 
     async def get_pairs(self) -> List[Dict[str, Any]]:
         """Load all active pairs for this symbol."""
-        async with self.db.execute(
+        db = self._conn()
+        async with db.execute(
             "SELECT * FROM grid_pairs WHERE symbol = ?", (self.symbol,)
         ) as cursor:
             rows = await cursor.fetchall()
@@ -109,7 +117,8 @@ class Repository:
     async def upsert_pair(self, pair_data: Dict[str, Any], metadata: str = '{}'):
         """Insert or Update a single pair (Atomic operation)."""
         # Extract fields from pair_data dict
-        await self.db.execute(
+        db = self._conn()
+        await db.execute(
             """
             INSERT INTO grid_pairs (
                 symbol, pair_index, buy_price, sell_price, 
@@ -161,15 +170,16 @@ class Repository:
                 metadata
             )
         )
-        await self.db.commit()
+        await db.commit()
 
     async def delete_pair(self, pair_index: int):
         """Remove a pair (used in Leapfrog)."""
-        await self.db.execute(
+        db = self._conn()
+        await db.execute(
             "DELETE FROM grid_pairs WHERE symbol = ? AND pair_index = ?",
             (self.symbol, pair_index)
         )
-        await self.db.commit()
+        await db.commit()
 
     # ========================================================================
     # TICKET MAP (Groups + 3-Cap Strategy)
@@ -179,7 +189,8 @@ class Repository:
                           leg: str, trade_count: int = 0,
                           entry_price: float = 0.0, tp_price: float = 0.0, sl_price: float = 0.0):
         """Save ticket → (pair, leg, prices) mapping for deterministic TP/SL detection."""
-        await self.db.execute(
+        db = self._conn()
+        await db.execute(
             """
             INSERT INTO ticket_map (ticket, symbol, cycle_id, pair_index, leg, trade_count, entry_price, tp_price, sl_price)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -194,7 +205,7 @@ class Repository:
             """,
             (ticket, self.symbol, cycle_id, pair_index, leg, trade_count, entry_price, tp_price, sl_price)
         )
-        await self.db.commit()
+        await db.commit()
 
     async def get_ticket_map(self) -> Dict[int, Tuple[int, str, float, float, float]]:
         """Load all ticket mappings for this symbol.
@@ -202,7 +213,8 @@ class Repository:
         Returns:
             Dict[ticket, (pair_index, leg, entry_price, tp_price, sl_price)]
         """
-        async with self.db.execute(
+        db = self._conn()
+        async with db.execute(
             "SELECT ticket, pair_index, leg, entry_price, tp_price, sl_price FROM ticket_map WHERE symbol = ?",
             (self.symbol,)
         ) as cursor:
@@ -211,19 +223,21 @@ class Repository:
 
     async def delete_ticket(self, ticket: int):
         """Remove a ticket from the map (on position close)."""
-        await self.db.execute(
+        db = self._conn()
+        await db.execute(
             "DELETE FROM ticket_map WHERE ticket = ?",
             (ticket,)
         )
-        await self.db.commit()
+        await db.commit()
 
     async def clear_ticket_map(self):
         """Clear all tickets for this symbol (on fresh start)."""
-        await self.db.execute(
+        db = self._conn()
+        await db.execute(
             "DELETE FROM ticket_map WHERE symbol = ?",
             (self.symbol,)
         )
-        await self.db.commit()
+        await db.commit()
 
     # ========================================================================
     # TRADE HISTORY
@@ -231,7 +245,8 @@ class Repository:
 
     async def log_trade(self, event: Dict[str, Any]):
         """Log a trade event to history table (Permanent storage)."""
-        await self.db.execute(
+        db = self._conn()
+        await db.execute(
             """
             INSERT INTO trade_history (symbol, timestamp, event_type, pair_index, direction, price, lot_size, ticket, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -242,7 +257,7 @@ class Repository:
                 event['lot_size'], event['ticket'], event.get('notes', '')
             )
         )
-        await self.db.commit()
+        await db.commit()
 
     async def close(self):
         if self.db:

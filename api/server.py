@@ -37,6 +37,10 @@ app.add_middleware(
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("Missing SUPABASE_URL or SUPABASE_KEY")
+
+assert SUPABASE_URL is not None and SUPABASE_KEY is not None
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Auth Cache (30 seconds - shorter TTL for multi-user support)
@@ -165,8 +169,11 @@ async def update_config(config: ConfigUpdate, bot = Depends(get_current_bot)):
             if sym_data:
                 update_data["symbols"][symbol] = sym_data
     
-    updated = bot.config_manager.update_config(update_data)
-    return updated
+    try:
+        updated = bot.config_manager.update_config(update_data)
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # --- Per-Symbol Control Endpoints ---
@@ -174,17 +181,50 @@ async def update_config(config: ConfigUpdate, bot = Depends(get_current_bot)):
 @app.post("/control/start")
 async def start_all(bot = Depends(get_current_bot)):
     """Start all enabled symbols - always starts with fresh DB"""
-    # Clean stale DB for fresh session
+    # Clean stale DB for fresh session with retry + force delete fallback
+    deleted = True  # Default to True if file doesn't exist
     if os.path.exists(DB_PATH):
-        try:
-            os.remove(DB_PATH)
-            print(f"[START] Cleaned DB for fresh session: {DB_PATH}")
-        except Exception as e:
-            print(f"[START] Could not clean DB: {e}")
-            return {
-                "status": "blocked",
-                "error": f"DB file locked ({e}). Please terminate all or restart bot."
-            }
+        # Attempt 1: Normal delete with retries
+        retry_count = 0
+        max_retries = 3
+        deleted = False
+        while retry_count < max_retries and not deleted:
+            try:
+                os.remove(DB_PATH)
+                deleted = True
+                print(f"[START] Cleaned DB for fresh session: {DB_PATH}")
+            except Exception as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    print(f"[START] DB delete attempt {retry_count} failed: {e}. Retrying...")
+                    await asyncio.sleep(0.5)
+        
+        # Attempt 2: Force delete using subprocess (Windows taskkill or Unix pkill)
+        if not deleted and os.path.exists(DB_PATH):
+            try:
+                import platform
+                if platform.system() == "Windows":
+                    os.system(f'taskkill /F /IM python.exe 2>nul')
+                    await asyncio.sleep(1)
+                    if os.path.exists(DB_PATH):
+                        os.remove(DB_PATH)
+                        deleted = True
+                        print(f"[START] Forced delete with taskkill succeeded.")
+                else:
+                    # Unix-like systems
+                    import subprocess
+                    subprocess.call(['pkill', '-f', 'grid_v3.db'])
+                    await asyncio.sleep(1)
+                    if os.path.exists(DB_PATH):
+                        os.remove(DB_PATH)
+                        deleted = True
+                        print(f"[START] Forced delete with pkill succeeded.")
+            except Exception as force_e:
+                print(f"[START] Force delete failed: {force_e}")
+        
+        # Final check
+        if not deleted and os.path.exists(DB_PATH):
+            print(f"[START] DB file still locked after all attempts, proceeding anyway...")
     
     # [FIX] Auto-Restart Trading Engine if stopped
     if not trading_engine.running:
@@ -198,7 +238,7 @@ async def start_all(bot = Depends(get_current_bot)):
             await asyncio.sleep(0.5)
         
     await bot.start()
-    return {"status": "started", "symbols": bot.config_manager.get_enabled_symbols()}
+    return {"status": "started", "symbols": bot.config_manager.get_enabled_symbols(), "db_cleaned": deleted}
 
 @app.post("/control/stop")
 async def stop_all(bot = Depends(get_current_bot)):

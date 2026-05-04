@@ -294,7 +294,7 @@
             </div>
             <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Positions</div>
-                <div class="text-2xl font-bold mt-1"><span id="pos-count">0</span> / <span id="max-pos-disp">5</span>
+                <div class="text-2xl font-bold mt-1"><span id="pos-count">0</span> / <span id="max-pos-disp">18</span>
                 </div>
             </div>
             <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -492,6 +492,8 @@
         let updateInterval = null;
         let sessionToken = null;
         let lastRunningState = false;
+        let sessionStartTs = null;
+        const MAX_POSITION_LIMIT = 18;
 
         // --- 1. UI State Helpers ---
         function setLoggedInState(session) {
@@ -675,7 +677,7 @@
             const pairBuyLot = cfg.pair_buy_lot || 0.01;
             const pairSellLot = cfg.pair_sell_lot || 0.01;
             const singleLot = cfg.single_lot || 0.01;
-            const maxPos = cfg.max_positions || 3;
+            const maxPos = Math.min(MAX_POSITION_LIMIT, cfg.max_positions || 3);
 
             return `
             <details class="bg-slate-800/50 rounded border border-slate-700 overflow-hidden" open>
@@ -733,7 +735,8 @@
                     <!-- Max Positions -->
                     <div>
                         <label class="block text-[10px] text-orange-400 mb-1">Max Positions (must be multiple of 3)</label>
-                        <input type="number" id="maxpos_${safeId}" step="3" min="3" value="${maxPos}"
+                        <input type="number" id="maxpos_${safeId}" step="3" min="3" max="${MAX_POSITION_LIMIT}" value="${maxPos}"
+                            oninput="clampMaxPositionsInput(this)"
                             class="w-full p-1.5 text-sm rounded bg-slate-900 border border-orange-700/50">
                         <p class="text-[8px] text-slate-500 mt-1">Excludes initial 2 positions at center</p>
                     </div>
@@ -744,7 +747,7 @@
 
         // Update lot inputs when max positions changes
         function updateLotInputs(symbol, safeId) {
-            const maxPos = parseInt(document.getElementById(`maxpos_${safeId}`).value) || 5;
+            const maxPos = Math.min(MAX_POSITION_LIMIT, parseInt(document.getElementById(`maxpos_${safeId}`).value) || 5);
             const container = document.getElementById(`lots_${safeId}`);
 
             // Preserve existing values
@@ -773,7 +776,15 @@
             document.querySelectorAll('.symbol-check').forEach(cb => {
                 cb.addEventListener('change', () => renderAssetSettings());
             });
+            const maxPosDisplay = document.getElementById('max-pos-disp');
+            if (maxPosDisplay) maxPosDisplay.textContent = String(MAX_POSITION_LIMIT);
         });
+
+        function clampMaxPositionsInput(input) {
+            const numericValue = parseInt(input.value, 10);
+            if (Number.isNaN(numericValue)) return;
+            input.value = String(Math.min(MAX_POSITION_LIMIT, Math.max(3, numericValue)));
+        }
 
         async function updateConfig(e) {
             e.preventDefault();
@@ -812,7 +823,7 @@
                         pair_buy_lot: parseFloat(document.getElementById(`pairbuy_${safeId}`)?.value) || 0.01,
                         pair_sell_lot: parseFloat(document.getElementById(`pairsell_${safeId}`)?.value) || 0.01,
                         single_lot: parseFloat(document.getElementById(`single_${safeId}`)?.value) || 0.01,
-                        max_positions: parseInt(document.getElementById(`maxpos_${safeId}`)?.value) || 3
+                        max_positions: Math.min(MAX_POSITION_LIMIT, parseInt(document.getElementById(`maxpos_${safeId}`)?.value) || 3)
                     };
                 }
             });
@@ -883,6 +894,9 @@
             // Use open_positions from backend (Source of Truth)
             document.getElementById('pos-count').textContent = status.open_positions || 0;
 
+            // Update session timer and check for auto-stop
+            updateSessionDisplay(status);
+
             // Display internal state
             const stateLabel = document.getElementById('cycle-state');
             if (status.is_resetting) stateLabel.textContent = "♻️ Resetting...";
@@ -927,6 +941,50 @@
             log("Signed out successfully.");
             setLoggedOutState();
         }
+
+        // --- Session Timer Helpers ---
+        function formatTime(sec) {
+            const m = Math.floor(sec / 60).toString().padStart(2, '0');
+            const s = Math.floor(sec % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function updateSessionDisplay(status) {
+            const totalMinutes = (currentConfig && currentConfig.global && currentConfig.global.max_runtime_minutes) ? parseInt(currentConfig.global.max_runtime_minutes) : 0;
+            const totalSec = totalMinutes * 60;
+            document.getElementById('session-total').textContent = formatTime(totalSec);
+
+            // Persistent session start handling (localStorage)
+            const stored = localStorage.getItem('bot_session_start');
+
+            if (status.running) {
+                if (stored) {
+                    sessionStartTs = parseInt(stored, 10);
+                } else if (!sessionStartTs) {
+                    sessionStartTs = Date.now();
+                    localStorage.setItem('bot_session_start', String(sessionStartTs));
+                }
+            } else {
+                // clear persisted session when not running
+                sessionStartTs = null;
+                localStorage.removeItem('bot_session_start');
+            }
+
+            const elapsedSec = sessionStartTs ? Math.floor((Date.now() - sessionStartTs) / 1000) : 0;
+            // Cap elapsed at total to prevent overflow
+            const cappedElapsedSec = Math.min(elapsedSec, totalSec);
+            const remaining = Math.max(0, totalSec - cappedElapsedSec);
+
+            document.getElementById('session-elapsed').textContent = formatTime(cappedElapsedSec);
+            document.getElementById('session-remaining').textContent = formatTime(remaining);
+
+            // Auto-stop: if time elapsed and no active trades
+            if (status.running && totalSec > 0 && elapsedSec >= totalSec && status.open_positions === 0) {
+                log('[AUTO-STOP] Time limit reached with no active trades - stopping bot');
+                stopAllSymbols();
+            }
+        }
+
         function startPolling() { if (updateInterval) clearInterval(updateInterval); updateInterval = setInterval(fetchStatus, 1000); }
         function log(msg) {
             const logs = document.getElementById('logs');

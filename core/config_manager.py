@@ -18,6 +18,8 @@ AVAILABLE_SYMBOLS = [
     "SwitchX 600", "SwitchX 1200", "SwitchX 1800", "BreakX 1200", "BreakX 1800"
 ]
 
+MAX_POSITION_LIMIT = 18
+
 def get_default_symbol_config() -> Dict[str, Any]:
       return {
           "enabled": False,
@@ -161,10 +163,12 @@ class ConfigManager:
                     prot_dist = self.config["symbols"][symbol].get("protection_distance", 100.0)
                     self.config["symbols"][symbol]["protection_distance"] = max(1.0, float(prot_dist))
         
-                    # Validate max_positions is multiple of 3
-                    max_pos = sym_cfg.get("max_positions", 3)
+                    # Validate max_positions is multiple of 3 and capped at 18
+                    max_pos = int(sym_cfg.get("max_positions", 3))
+                    max_pos = max(3, min(MAX_POSITION_LIMIT, max_pos))
                     if max_pos % 3 != 0:
                         raise ValueError(f"max_positions must be multiple of 3, got {max_pos}")
+                    self.config["symbols"][symbol]["max_positions"] = max_pos
         
         self.save_config()
         return self.config
