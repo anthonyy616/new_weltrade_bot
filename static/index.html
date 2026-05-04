@@ -766,10 +766,18 @@
             }
 
             const elapsedSec = sessionStartTs ? Math.floor((Date.now() - sessionStartTs) / 1000) : 0;
-            const remaining = Math.max(0, totalSec - elapsedSec);
+            // Cap elapsed at total to prevent overflow
+            const cappedElapsedSec = Math.min(elapsedSec, totalSec);
+            const remaining = Math.max(0, totalSec - cappedElapsedSec);
 
-            document.getElementById('session-elapsed').textContent = formatTime(elapsedSec);
+            document.getElementById('session-elapsed').textContent = formatTime(cappedElapsedSec);
             document.getElementById('session-remaining').textContent = formatTime(remaining);
+
+            // Auto-stop: if time elapsed and no active trades
+            if (status.running && totalSec > 0 && elapsedSec >= totalSec && status.open_positions === 0) {
+                log('[AUTO-STOP] Time limit reached with no active trades - stopping bot');
+                stopAllSymbols();
+            }
         }
 
         // --- History Functions ---

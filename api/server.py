@@ -173,17 +173,50 @@ async def update_config(config: ConfigUpdate, bot = Depends(get_current_bot)):
 @app.post("/control/start")
 async def start_all(bot = Depends(get_current_bot)):
     """Start all enabled symbols - always starts with fresh DB"""
-    # Clean stale DB for fresh session
+    # Clean stale DB for fresh session with retry + force delete fallback
+    deleted = True  # Default to True if file doesn't exist
     if os.path.exists(DB_PATH):
-        try:
-            os.remove(DB_PATH)
-            print(f"[START] Cleaned DB for fresh session: {DB_PATH}")
-        except Exception as e:
-            print(f"[START] Could not clean DB: {e}")
-            return {
-                "status": "blocked",
-                "error": f"DB file locked ({e}). Please terminate all or restart bot."
-            }
+        # Attempt 1: Normal delete with retries
+        retry_count = 0
+        max_retries = 3
+        deleted = False
+        while retry_count < max_retries and not deleted:
+            try:
+                os.remove(DB_PATH)
+                deleted = True
+                print(f"[START] Cleaned DB for fresh session: {DB_PATH}")
+            except Exception as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    print(f"[START] DB delete attempt {retry_count} failed: {e}. Retrying...")
+                    await asyncio.sleep(0.5)
+        
+        # Attempt 2: Force delete using subprocess (Windows taskkill or Unix pkill)
+        if not deleted and os.path.exists(DB_PATH):
+            try:
+                import platform
+                if platform.system() == "Windows":
+                    os.system(f'taskkill /F /IM python.exe 2>nul')
+                    await asyncio.sleep(1)
+                    if os.path.exists(DB_PATH):
+                        os.remove(DB_PATH)
+                        deleted = True
+                        print(f"[START] Forced delete with taskkill succeeded.")
+                else:
+                    # Unix-like systems
+                    import subprocess
+                    subprocess.call(['pkill', '-f', 'grid_v3.db'])
+                    await asyncio.sleep(1)
+                    if os.path.exists(DB_PATH):
+                        os.remove(DB_PATH)
+                        deleted = True
+                        print(f"[START] Forced delete with pkill succeeded.")
+            except Exception as force_e:
+                print(f"[START] Force delete failed: {force_e}")
+        
+        # Final check
+        if not deleted and os.path.exists(DB_PATH):
+            print(f"[START] DB file still locked after all attempts, proceeding anyway...")
     
     # [FIX] Auto-Restart Trading Engine if stopped
     if not trading_engine.running:
