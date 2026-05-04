@@ -340,3 +340,4 @@ class Repository:
     async def close(self):
         if self.db:
             await self.db.close()
+            self.db = None

@@ -13,6 +13,12 @@ import signal
 import sys
 from dotenv import load_dotenv
 from cachetools import TTLCache 
+import gc
+
+try:
+    import psutil  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - deployment dependency fallback
+    psutil = None
 
 load_dotenv()
 
@@ -170,53 +176,115 @@ async def update_config(config: ConfigUpdate, bot = Depends(get_current_bot)):
 
 # --- Per-Symbol Control Endpoints ---
 
+
+async def _prepare_fresh_session(bot):
+    """Ensure all bot resources are closed before replacing the SQLite file."""
+    try:
+        if hasattr(bot, "terminate_all"):
+            await bot.terminate_all()
+        elif hasattr(bot, "stop"):
+            await bot.stop()
+    finally:
+        close_fn = getattr(bot, "close", None)
+        if close_fn is not None:
+            await close_fn()
+        gc.collect()
+
+
+async def _delete_db_file() -> bool:
+    if not os.path.exists(DB_PATH):
+        return True
+
+    retry_count = 0
+    max_retries = 3
+
+    while retry_count < max_retries:
+        try:
+            os.remove(DB_PATH)
+            print(f"[START] Cleaned DB for fresh session: {DB_PATH}")
+            return True
+        except PermissionError as e:
+            retry_count += 1
+            print(f"[START] DB delete attempt {retry_count} failed: {e}")
+            if retry_count < max_retries:
+                await asyncio.sleep(0.5)
+        except Exception as e:
+            retry_count += 1
+            print(f"[START] DB delete attempt {retry_count} failed: {e}")
+            if retry_count < max_retries:
+                await asyncio.sleep(0.5)
+
+    await _release_db_locks(DB_PATH)
+    await asyncio.sleep(0.5)
+
+    try:
+        os.remove(DB_PATH)
+        print(f"[START] Cleaned DB after releasing locks: {DB_PATH}")
+        return True
+    except Exception as e:
+        print(f"[START] Final DB delete failed: {e}")
+
+    return not os.path.exists(DB_PATH)
+
+
+async def _release_db_locks(db_path: str) -> None:
+    """Terminate only the processes that currently hold the DB file open."""
+    if psutil is None:
+        return
+
+    target_path = os.path.abspath(db_path)
+    locked_pids = set()
+    current_pid = os.getpid()
+
+    for proc in psutil.process_iter(["pid", "name", "open_files"]):
+        try:
+            open_files = proc.info.get("open_files") or []
+            for file_info in open_files:
+                try:
+                    if os.path.abspath(file_info.path) == target_path:
+                        pid = proc.info["pid"]
+                        if pid != current_pid:
+                            locked_pids.add(pid)
+                        break
+                except Exception:
+                    continue
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+    if not locked_pids:
+        return
+
+    print(f"[START] DB still locked by PIDs: {sorted(locked_pids)}. Releasing holders...")
+
+    for pid in locked_pids:
+        try:
+            proc = psutil.Process(pid)
+            proc.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    try:
+        _, alive = psutil.wait_procs([psutil.Process(pid) for pid in locked_pids if psutil.pid_exists(pid)], timeout=2)
+        for proc in alive:
+            try:
+                proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        await asyncio.sleep(0.5)
+    except Exception as e:
+        print(f"[START] Process release wait failed: {e}")
+
 @app.post("/control/start")
 async def start_all(bot = Depends(get_current_bot)):
     """Start all enabled symbols - always starts with fresh DB"""
-    # Clean stale DB for fresh session with retry + force delete fallback
-    deleted = True  # Default to True if file doesn't exist
-    if os.path.exists(DB_PATH):
-        # Attempt 1: Normal delete with retries
-        retry_count = 0
-        max_retries = 3
-        deleted = False
-        while retry_count < max_retries and not deleted:
-            try:
-                os.remove(DB_PATH)
-                deleted = True
-                print(f"[START] Cleaned DB for fresh session: {DB_PATH}")
-            except Exception as e:
-                retry_count += 1
-                if retry_count < max_retries:
-                    print(f"[START] DB delete attempt {retry_count} failed: {e}. Retrying...")
-                    await asyncio.sleep(0.5)
-        
-        # Attempt 2: Force delete using subprocess (Windows taskkill or Unix pkill)
-        if not deleted and os.path.exists(DB_PATH):
-            try:
-                import platform
-                if platform.system() == "Windows":
-                    os.system(f'taskkill /F /IM python.exe 2>nul')
-                    await asyncio.sleep(1)
-                    if os.path.exists(DB_PATH):
-                        os.remove(DB_PATH)
-                        deleted = True
-                        print(f"[START] Forced delete with taskkill succeeded.")
-                else:
-                    # Unix-like systems
-                    import subprocess
-                    subprocess.call(['pkill', '-f', 'grid_v3.db'])
-                    await asyncio.sleep(1)
-                    if os.path.exists(DB_PATH):
-                        os.remove(DB_PATH)
-                        deleted = True
-                        print(f"[START] Forced delete with pkill succeeded.")
-            except Exception as force_e:
-                print(f"[START] Force delete failed: {force_e}")
-        
-        # Final check
-        if not deleted and os.path.exists(DB_PATH):
-            print(f"[START] DB file still locked after all attempts, proceeding anyway...")
+    await _prepare_fresh_session(bot)
+    deleted = await _delete_db_file()
+
+    if not deleted and os.path.exists(DB_PATH):
+        raise HTTPException(
+            status_code=409,
+            detail="DB file is still locked after closing the bot session. Stop the process holding the file and try again."
+        )
     
     # [FIX] Auto-Restart Trading Engine if stopped
     if not trading_engine.running:
@@ -241,17 +309,14 @@ async def stop_all(bot = Depends(get_current_bot)):
 @app.post("/control/start/{symbol}")
 async def start_symbol(symbol: str, bot = Depends(get_current_bot)):
     """Start a specific symbol"""
-    # Clean stale DB for fresh session
-    if os.path.exists(DB_PATH):
-        try:
-            os.remove(DB_PATH)
-            print(f"[START] Cleaned DB for fresh session: {DB_PATH}")
-        except Exception as e:
-            print(f"[START] Could not clean DB: {e}")
-            return {
-                "status": "blocked",
-                "error": f"DB file locked ({e}). Please terminate all or restart bot."
-            }
+    await _prepare_fresh_session(bot)
+    deleted = await _delete_db_file()
+
+    if not deleted and os.path.exists(DB_PATH):
+        raise HTTPException(
+            status_code=409,
+            detail="DB file is still locked after closing the bot session. Stop the process holding the file and try again."
+        )
     
     # [FIX] Auto-Restart Trading Engine if stopped
     if not trading_engine.running:

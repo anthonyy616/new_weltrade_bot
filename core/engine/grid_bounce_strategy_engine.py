@@ -986,6 +986,12 @@ class GridBounceStrategyEngine:
         await self.save_state()
         print(f"[TERMINATE] {self.symbol}: Terminated completely.")
 
+    async def close(self):
+        """Release persistent resources held by the strategy."""
+        if self.repository is not None:
+            await self.repository.close()
+            self.repository = None
+
 
     #Status API
 

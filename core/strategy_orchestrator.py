@@ -133,6 +133,9 @@ class StrategyOrchestrator:
         async def safe_terminate(name, strat):
             try:
                 await strat.terminate()
+                close_fn = getattr(strat, "close", None)
+                if close_fn is not None:
+                    await close_fn()
                 return True
             except Exception as e:
                 print(f"[ERROR] Failed to terminate {name}: {e}")
@@ -184,6 +187,20 @@ class StrategyOrchestrator:
             print(f"[TERMINATE ALL] Cleaned up {count} residual positions.")
 
         print("[TERMINATE ALL] All strategies terminated (or attempted).")
+
+    async def close(self):
+        """Release any open resources held by strategies and repositories."""
+        tasks = []
+        for strategy in self.strategies.values():
+            close_fn = getattr(strategy, "close", None)
+            if close_fn is not None:
+                tasks.append(close_fn())
+
+        if tasks:
+            await asyncio.gather(*tasks)
+
+        self.strategies.clear()
+        self.active_symbols.clear()
 
     async def start_ticker(self):
         """
