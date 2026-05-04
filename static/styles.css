@@ -1,0 +1,115 @@
+/* Progressive UI overrides and new theme rules */
+
+/* Override dark mode body text to purple as requested */
+.dark body, body.dark {
+  color: #7f00ff !important;
+}
+
+/* Logs panel: white bg in light mode, black bg in dark mode, green monospace text */
+#logs {
+  background-color: #ffffff !important;
+  color: #16a34a !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace !important;
+  border: 1px solid #e6e6e6 !important;
+}
+
+.dark #logs, body.dark #logs {
+  background-color: #000000 !important;
+  color: #16a34a !important;
+  border: 1px solid #111827 !important;
+}
+
+/* Make sure buttons keep readable white text where explicitly set */
+.btn, button { color: inherit; }
+
+/* Utility: purple text helper */
+.text-purple-custom { color: #7f00ff !important; }
+
+/* Small adjustments for session card */
+#session-elapsed, #session-total, #session-remaining { font-weight: 600; }
+
+/* Keep inputs readable in dark mode but with purple highlights */
+.dark .input, .dark input, .dark .input:focus { color: #7f00ff !important; border-color: #7f00ff !important; }
+
+/* Reduce contrast for muted text in dark */
+.dark .text-muted { color: #cdbcff !important; }
+
+/* Small responsive tweaks */
+@media (max-width: 768px) {
+  #logs { max-height: 200px; }
+}
+
+/* --- Moved from inline index.html styles --- */
+/* Loading Spinner */
+.loader {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #3b82f6;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+* { box-sizing: border-box; }
+
+/* Base Styles */
+body { background-color: #ffffff; color: #0f172a; transition: background-color 0.3s, color 0.3s; margin: 0; padding: 0; }
+
+.card { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; transition: background-color 0.3s, border-color 0.3s; }
+
+.input { background-color: #ffffff; border: 1px solid #cbd5e1; color: #0f172a; padding: 0.5rem; border-radius: 0.25rem; width: 100%; transition: all 0.3s; }
+.input:focus { outline: none; border-color: #3b82f6; width: 100%; }
+
+.text-muted { color: #64748b; }
+.text-secondary { color: #475569; }
+.logs-bg { background-color: #f1f5f9; }
+.logs-text { color: #16a34a; }
+
+/* Dark Mode Overrides */
+.dark body { background-color: #020617; color: #f8fafc; }
+.dark .card { background-color: #1e293b; border: 1px solid #334155; }
+.dark .input { background-color: #0f172a; border: 1px solid #334155; color: white; }
+.dark .text-muted { color: #94a3b8; }
+.dark .text-secondary { color: #cbd5e1; }
+.dark .logs-bg { background-color: #0f172a; }
+.dark .logs-text { color: #22c55e; }
+
+/* Buttons */
+.btn { padding: 0.5rem 1rem; border-radius: 0.25rem; font-weight: 500; transition: all 0.2s; cursor: pointer; border: none; }
+.btn-primary { background-color: #3b82f6; color: white; }
+.btn-primary:hover { background-color: #2563eb; }
+.btn-danger { background-color: #ef4444; color: white; }
+.btn-danger:hover { background-color: #dc2626; }
+.btn-success { background-color: #22c55e; color: white; }
+.btn-success:hover { background-color: #16a34a; }
+.btn-theme { background-color: #3b82f6; color: white; padding: 0.5rem 0.75rem; border-radius: 0.25rem; font-weight: 500; font-size: 0.875rem; transition: all 0.2s; }
+.btn-theme:hover { background-color: #2563eb; }
+
+/* Modal */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display:flex; justify-content:center; align-items:center; z-index:50; backdrop-filter: blur(4px); }
+.modal-content { background-color: #ffffff; padding: 2rem; border-radius: 0.5rem; width: 90%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); max-height: 90vh; overflow-y: auto; }
+.dark .modal-content { background-color: #1e293b; border: 1px solid #334155; }
+
+/* Mobile optimizations (from index) */
+@media (max-width: 768px) {
+  body { padding: 0.5rem; }
+  .card { padding: 0.75rem; }
+  h1 { font-size: 1.5rem !important; }
+  .stat-value { font-size: 1.5rem !important; }
+  .btn { padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+  .btn-theme { padding: 0.4rem 0.6rem; font-size: 0.75rem; }
+}
+
+/* Session / popup logs styling used by viewSession/viewGroupLog */
+.session-log {
+  background: #1e293b;
+  color: #94a3b8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+  padding: 20px;
+  white-space: pre-wrap;
+}

@@ -1,6 +1,6 @@
 {
     "global": {
-        "max_runtime_minutes": 15
+        "max_runtime_minutes": 30
     },
     "symbols": {
         "FX Vol 20": {
@@ -11,7 +11,7 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.02,
-            "max_positions": 6
+            "max_positions": 12
         },
         "FX Vol 40": {
             "enabled": false,

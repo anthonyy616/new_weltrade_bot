@@ -19,3 +19,5 @@ logs/
 
 symbol_engine.py
 pair_strategy_engine.py
+
+personal/
