@@ -1,8 +1,7 @@
 import uuid
-from typing import Dict
+from typing import Dict, Optional
 from core.config_manager import ConfigManager
 from core.strategy_orchestrator import StrategyOrchestrator
-from pair_strategy_engine import PairStrategyEngine
 
 class BotManager:
     def __init__(self):
@@ -32,7 +31,7 @@ class BotManager:
         self.bots[user_id] = orchestrator
         return orchestrator
 
-    def get_bot(self, user_id: str) -> StrategyOrchestrator:
+    def get_bot(self, user_id: str) -> Optional[StrategyOrchestrator]:
         return self.bots.get(user_id)
 
     async def stop_bot(self, user_id: str):

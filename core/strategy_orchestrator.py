@@ -1,4 +1,8 @@
-from typing import Dict, List, Set, Any
+"""Strategy orchestration for grid-bounce engine."""
+
+# pyright: reportAttributeAccessIssue=false
+
+from typing import Any, Dict, List, Set
 import asyncio
 import time
 from core.engine.grid_bounce_strategy_engine import GridBounceStrategyEngine as GridStrategy
@@ -43,6 +47,10 @@ class StrategyOrchestrator:
         to_remove = current_symbols - enabled_symbols
         for sym in to_remove:
             print(f"[ORCHESTRATOR] Stopping Strategy: {sym}")
+            strategy = self.strategies.get(sym)
+            if strategy and strategy.running:
+                # Best-effort graceful stop before dropping the reference.
+                asyncio.create_task(strategy.stop())
             del self.strategies[sym]
 
         # 2. Add newly enabled symbols
@@ -90,8 +98,9 @@ class StrategyOrchestrator:
         if symbol in self.strategies:
             self.session_logger.log_button(f"Stop {symbol}")
             await self.strategies[symbol].stop()
-            del self.strategies[symbol]
-            self.active_symbols.discard(symbol)
+            if not self.strategies[symbol].running:
+                del self.strategies[symbol]
+                self.active_symbols.discard(symbol)
 
     async def terminate_symbol(self, symbol: str):
         """

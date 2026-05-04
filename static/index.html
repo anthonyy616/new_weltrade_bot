@@ -294,7 +294,7 @@
             </div>
             <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Positions</div>
-                <div class="text-2xl font-bold mt-1"><span id="pos-count">0</span> / <span id="max-pos-disp">5</span>
+                <div class="text-2xl font-bold mt-1"><span id="pos-count">0</span> / <span id="max-pos-disp">3</span>
                 </div>
             </div>
             <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -436,12 +436,11 @@
                     </button>
 
                     <p class="text-[11px] text-slate-500 mt-2 p-2 bg-slate-800/50 rounded border border-slate-700">
-                        <strong>Lot Sizes:</strong> Trade #N uses Lot #N (toggle: B-S-B-S per pair).<br>
-                        <strong>Max pairs:</strong> 9 max, must be odd (1,3,5,7 and 9).
-                        <strong>Max positions:</strong> 20 max (1-20).
+                        <strong>Lot Sizes:</strong> Pair Buy, Pair Sell, and Single lot values are configured per asset.<br>
+                        <strong>Max positions:</strong> Must be a multiple of 3 because the strategy opens 3 positions per bounce.
                         <strong>Get session history below:</strong> Click "Refresh" to load session history.
-                        <strong>Graceful stop:</strong> Graceful stop: completes trades to max positions first.
-                        <strong>Nuclear reset:</strong> Nuclear reset: closes all positions immediately for all assets.
+                        <strong>Graceful stop:</strong> Graceful stop waits for the current cycle to finish before stopping.
+                        <strong>Nuclear reset:</strong> Nuclear reset closes all positions immediately and restarts from the current price.
                     </p>
                 </form>
             </div>
@@ -667,7 +666,7 @@
             container.innerHTML = html;
         }
 
-        // Render a single asset's accordion settings panel (Pair Strategy)
+        // Render a single asset's accordion settings panel (Grid Bounce Strategy)
         function renderAssetSettingsPanel(symbol, safeId, cfg) {
             const gridDist = cfg.grid_distance || 50;
             const tpPips = cfg.tp_pips || 150;
@@ -802,7 +801,7 @@
 
                 payload.symbols[symbol] = { enabled: isEnabled };
 
-                // If enabled, get its settings (Pair Strategy)
+                // If enabled, get its settings (Grid Bounce Strategy)
                 if (isEnabled) {
                     payload.symbols[symbol] = {
                         enabled: true,

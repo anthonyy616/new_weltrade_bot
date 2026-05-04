@@ -37,6 +37,9 @@ app.add_middleware(
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("Missing SUPABASE_URL or SUPABASE_KEY")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Auth Cache (30 seconds - shorter TTL for multi-user support)
@@ -55,19 +58,15 @@ async def startup_event():
 # --- Pydantic Models for Config ---
 
 class SymbolConfig(BaseModel):
-    """Config for a single symbol (Pair Strategy)"""
+    """Config for a single symbol (Grid Bounce Strategy)"""
     enabled: Optional[bool] = None
-    grid_distance: Optional[float] = None        # Pips between atomic fires
-    tp_pips: Optional[float] = None              # Take profit distance
-    sl_pips: Optional[float] = None              # Stop loss distance
-    bx_lot: Optional[float] = None               # Initial Buy lot
-    sy_lot: Optional[float] = None               # Initial Sell lot
-    sx_lot: Optional[float] = None               # Completing Sell lot
-    by_lot: Optional[float] = None               # Completing Buy lot
-    single_fire_lot: Optional[float] = None      # Single fire lot size
-    single_fire_tp_pips: Optional[float] = None  # Single fire TP distance
-    single_fire_sl_pips: Optional[float] = None  # Single fire SL distance
-    protection_distance: Optional[float] = None  # Pips before nuclear reset on reversal
+    grid_distance: Optional[float] = None
+    tp_pips: Optional[float] = None
+    sl_pips: Optional[float] = None
+    pair_buy_lot: Optional[float] = None
+    pair_sell_lot: Optional[float] = None
+    single_lot: Optional[float] = None
+    max_positions: Optional[int] = None
 
 class GlobalConfig(BaseModel):
     """Global settings"""
