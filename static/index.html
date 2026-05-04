@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weltrade MT5 Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f172a',
+                        darker: '#020617',
+                        card: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Loading Spinner */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        /* Base Styles */
+        body {
+            background-color: #ffffff;
+            color: #0f172a;
+            transition: background-color 0.3s, color 0.3s;
+            margin: 0;
+            padding: 0;
+        }
+
+        .card {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        .input {
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            width: 100%;
+            transition: all 0.3s;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            width: 100%;
+        }
+
+        .text-muted {
+            color: #64748b;
+        }
+
+        .text-secondary {
+            color: #475569;
+        }
+
+        .logs-bg {
+            background-color: #f1f5f9;
+        }
+
+        .logs-text {
+            color: #16a34a;
+        }
+
+        /* Dark Mode Overrides */
+        .dark body {
+            background-color: #020617;
+            color: #f8fafc;
+        }
+
+        .dark .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+        }
+
+        .dark .input {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+        }
+
+        .dark .text-muted {
+            color: #94a3b8;
+        }
+
+        .dark .text-secondary {
+            color: #cbd5e1;
+        }
+
+        .dark .logs-bg {
+            background-color: #0f172a;
+        }
+
+        .dark .logs-text {
+            color: #22c55e;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+
+        .btn-danger {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+
+        .btn-success {
+            background-color: #22c55e;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #16a34a;
+        }
+
+        .btn-theme {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.25rem;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .btn-theme:hover {
+            background-color: #2563eb;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .dark .modal-content {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            body {
+                padding: 0.5rem;
+            }
+
+            .card {
+                padding: 0.75rem;
+            }
+
+            h1 {
+                font-size: 1.5rem !important;
+            }
+
+            .stat-value {
+                font-size: 1.5rem !important;
+            }
+
+            .btn {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.875rem;
+            }
+
+            .btn-theme {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+
+<body
+    class="p-4 md:p-8 font-sans bg-gray-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-300">
+
+    <div id="login-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center">
+        <div
+            class="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700">
+            <h2 class="text-2xl font-bold text-center mb-6 text-blue-500">Weltrade Bot Login</h2>
+            <form id="form-login" onsubmit="handleSupabaseLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Email</label>
+                    <input type="email" id="email"
+                        class="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 outline-none"
+                        required placeholder="user@example.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Password</label>
+                    <input type="password" id="password"
+                        class="w-full p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 outline-none"
+                        required placeholder="••••••••">
+                </div>
+                <button type="submit" id="login-btn"
+                    class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition flex justify-center items-center gap-2">
+                    <span>Sign In / Register</span>
+                </button>
+            </form>
+            <p id="login-error" class="text-red-500 text-sm text-center mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <div id="dashboard" class="max-w-6xl mx-auto space-y-6 hidden">
+        <div class="flex items-center justify-between">
+            <h1 class="text-2xl md:text-3xl font-bold text-blue-500">Weltrade MT5 Bot</h1>
+            <div class="flex items-center gap-3">
+                <div id="status-badge"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <div class="h-2 w-2 rounded-full bg-slate-400"></div> Offline
+                </div>
+                <button id="toggle-btn"
+                    class="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded"
+                    onclick="toggleBot()">Start Bot</button>
+                <button onclick="logout()"
+                    class="px-3 py-1.5 bg-red-500/10 text-red-500 text-xs font-medium rounded border border-red-500/20">Sign
+                    Out</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Live Price</div>
+                <div id="price-display" class="text-2xl font-bold mt-1 tracking-tight">---</div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Positions</div>
+                <div class="text-2xl font-bold mt-1"><span id="pos-count">0</span> / <span id="max-pos-disp">5</span>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Pending</div>
+                <div class="text-2xl font-bold mt-1"><span id="pending-count">0</span></div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Bot State</div>
+                <div id="cycle-state" class="text-xl font-bold mt-1 text-blue-400">Idle</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div
+                class="md:col-span-1 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700 h-fit">
+                <h2 class="text-lg font-semibold mb-4 border-b pb-2 border-slate-700">Settings</h2>
+                <form onsubmit="updateConfig(event)" class="space-y-4">
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-2">Indices (Multi-Select)</label>
+                            <div
+                                class="grid grid-cols-2 gap-1 p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-600 max-h-60 overflow-y-auto custom-scrollbar">
+
+                                <!-- FX Indices -->
+                                <div
+                                    class="col-span-2 text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1 mt-1">
+                                    FX Indices</div>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-blue-600 h-4 w-4"
+                                        value="FX Vol 20">
+                                    <span class="text-xs font-medium">FX Vol 20</span>
+                                </label>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-blue-600 h-4 w-4"
+                                        value="FX Vol 40">
+                                    <span class="text-xs font-medium">FX Vol 40</span>
+                                </label>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-blue-600 h-4 w-4"
+                                        value="FX Vol 60">
+                                    <span class="text-xs font-medium">FX Vol 60</span>
+                                </label>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-blue-600 h-4 w-4"
+                                        value="FX Vol 80">
+                                    <span class="text-xs font-medium">FX Vol 80</span>
+                                </label>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-blue-600 h-4 w-4"
+                                        value="FX Vol 99">
+                                    <span class="text-xs font-medium">FX Vol 99</span>
+                                </label>
+
+                                <!-- SFX Indices -->
+                                <div
+                                    class="col-span-2 text-[10px] font-bold text-purple-500 uppercase tracking-wider mt-3 mb-1 border-t border-slate-700 pt-2">
+                                    SFX Indices</div>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-purple-600 h-4 w-4"
+                                        value="SFX Vol 20">
+                                    <span class="text-xs font-medium">SFX Vol 20</span>
+                                </label>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-purple-600 h-4 w-4"
+                                        value="SFX Vol 40">
+                                    <span class="text-xs font-medium">SFX Vol 40</span>
+                                </label>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-purple-600 h-4 w-4"
+                                        value="SFX Vol 60">
+                                    <span class="text-xs font-medium">SFX Vol 60</span>
+                                </label>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-purple-600 h-4 w-4"
+                                        value="SFX Vol 80">
+                                    <span class="text-xs font-medium">SFX Vol 80</span>
+                                </label>
+                                <label
+                                    class="flex items-center space-x-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 p-1 rounded transition">
+                                    <input type="checkbox" class="symbol-check accent-purple-600 h-4 w-4"
+                                        value="SFX Vol 99">
+                                    <span class="text-xs font-medium">SFX Vol 99</span>
+                                </label>
+
+                            </div>
+                        </div>
+
+                        <!-- Per-Asset Settings will appear here when checked -->
+                        <div id="asset-settings-container" class="space-y-2 mt-3">
+                            <!-- Dynamic per-asset settings rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Global Settings -->
+                    <div class="p-3 border border-slate-700 rounded bg-slate-900/30">
+                        <label class="block text-xs font-bold text-slate-400 mb-2">⚙️ Global Settings</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-0.5">Max Time (Min)</label>
+                                <input type="number" id="max_runtime_minutes" value="0"
+                                    class="w-full p-1.5 text-sm rounded bg-slate-900 border border-slate-600">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                        class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition hover:shadow-lg">
+                        Update Configuration
+                    </button>
+
+                    <!-- Start/Stop All Controls -->
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <button type="button" onclick="startAllSymbols()"
+                            class="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium">
+                            Start All
+                        </button>
+                        <button type="button" onclick="stopAllSymbols()"
+                            class="w-full py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-medium"
+                            title="Graceful stop: completes trades to max positions first">
+                            Graceful Stop All
+                        </button>
+                    </div>
+
+                    <!-- Terminate All (Nuclear) -->
+                    <button type="button" onclick="terminateAllSymbols()"
+                        class="w-full py-2 mt-2 bg-red-800 hover:bg-red-900 text-white rounded text-sm font-bold border-2 border-red-600"
+                        title="NUCLEAR: Closes ALL positions immediately for ALL assets">
+                        TERMINATE ALL (Nuclear Reset)
+                    </button>
+
+                    <p class="text-[11px] text-slate-500 mt-2 p-2 bg-slate-800/50 rounded border border-slate-700">
+                        <strong>Lot Sizes:</strong> Trade #N uses Lot #N (toggle: B-S-B-S per pair).<br>
+                        <strong>Max pairs:</strong> 9 max, must be odd (1,3,5,7 and 9).
+                        <strong>Max positions:</strong> 20 max (1-20).
+                        <strong>Get session history below:</strong> Click "Refresh" to load session history.
+                        <strong>Graceful stop:</strong> Graceful stop: completes trades to max positions first.
+                        <strong>Nuclear reset:</strong> Nuclear reset: closes all positions immediately for all assets.
+                    </p>
+                </form>
+            </div>
+
+            <div
+                class="md:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col h-[600px]">
+                <h2 class="text-lg font-semibold mb-2">Live Terminal</h2>
+                <div id="logs"
+                    class="flex-1 bg-slate-950 rounded p-4 font-mono text-xs overflow-y-auto text-green-400 border border-slate-800">
+                    <div>[System] Ready.</div>
+                </div>
+            </div>
+
+            <!-- Session History Panel -->
+            <div
+                class="md:col-span-3 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold">Session History</h2>
+                    <button onclick="loadHistory()"
+                        class="text-xs bg-slate-600 hover:bg-slate-700 text-white px-3 py-1 rounded">
+                        Refresh
+                    </button>
+                </div>
+                <div id="history-list" class="space-y-2 max-h-48 overflow-y-auto">
+                    <p class="text-slate-500 text-sm text-center py-4">Click "Refresh" to load session history</p>
+                </div>
+            </div>
+
+            <!-- Group Logs Panel -->
+            <div
+                class="md:col-span-3 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold">Group Logs</h2>
+                    <button onclick="loadGroupLogs()"
+                        class="text-xs bg-slate-600 hover:bg-slate-700 text-white px-3 py-1 rounded">
+                        Refresh
+                    </button>
+                </div>
+                <div id="group-logs-list" class="space-y-2 max-h-48 overflow-y-auto">
+                    <p class="text-slate-500 text-sm text-center py-4">Click "Refresh" to load group logs</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let supabaseClient = null;
+        let updateInterval = null;
+        let sessionToken = null;
+        let lastRunningState = false;
+
+        // --- 1. UI State Helpers ---
+        function setLoggedInState(session) {
+            sessionToken = session.access_token;
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            const btn = document.getElementById('login-btn');
+            if (btn) btn.innerHTML = 'Sign In / Register';
+            log("✅ Authenticated.");
+            loadConfig();
+            startPolling();
+        }
+
+        function setLoggedOutState() {
+            sessionToken = null;
+            document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+            if (updateInterval) clearInterval(updateInterval);
+        }
+
+        // --- 2. Robust API Client ---
+        // PRODUCTION FIX: Use relative URL (empty string) so it works on any host
+        // The API is served from the same server as the frontend
+        const BASE_URL = "";
+
+
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            // Check session validity before every call to prevent 401 loops
+            const { data } = await supabaseClient.auth.getSession();
+            const token = data.session?.access_token;
+
+            if (!token) {
+                console.warn("Session expired. Logging out.");
+                setLoggedOutState();
+                return null;
+            }
+
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+
+            const opts = { method, headers };
+            if (body) opts.body = JSON.stringify(body);
+
+            try {
+
+                // UPDATE: We now combine BASE_URL + endpoint
+                // Example: http://45.144.242.97:800/config
+                const res = await fetch(BASE_URL + endpoint, opts);
+
+                if (res.status === 401) {
+                    console.error("401 Unauthorized - Force Logout");
+                    supabaseClient.auth.signOut();
+                    setLoggedOutState();
+                    return null;
+                }
+
+                return res.json();
+            } catch (e) {
+                console.error("API Connection Error:", e);
+                // Don't log out on network error, just return null
+                return null;
+            }
+        }
+
+        // --- 3. Supabase Init ---
+        async function initSupabase() {
+            try {
+                const res = await fetch('/env');
+                const env = await res.json();
+
+                if (!env.SUPABASE_URL || !env.SUPABASE_KEY) {
+                    document.getElementById('login-error').textContent = "Server Error: Missing .env keys";
+                    document.getElementById('login-error').classList.remove('hidden');
+                    return;
+                }
+
+                supabaseClient = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_KEY, {
+                    auth: {
+                        persistSession: true,
+                        autoRefreshToken: true,
+                        detectSessionInUrl: true
+                    }
+                });
+
+                // Auto-login check
+                const { data } = await supabaseClient.auth.getSession();
+                if (data.session) setLoggedInState(data.session);
+
+                // Auth Listener
+                supabaseClient.auth.onAuthStateChange((event, session) => {
+                    if (session) setLoggedInState(session);
+                    else setLoggedOutState();
+                });
+            } catch (e) { console.error("Init Error", e); }
+        }
+
+        async function handleSupabaseLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const btn = document.getElementById('login-btn');
+            const errBox = document.getElementById('login-error');
+
+            errBox.classList.add('hidden');
+            btn.innerHTML = '<div class="loader"></div>';
+
+            try {
+                const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (loginData.session) return; // Listener handles the rest
+
+                // Fallback to Registration
+                const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({ email, password });
+                if (signUpData.session) return;
+
+                if (signUpError) throw signUpError;
+                if (loginError) throw loginError;
+
+            } catch (e) {
+                console.error("Auth Error", e);
+                errBox.textContent = e.message || "Authentication failed.";
+                errBox.classList.remove('hidden');
+                btn.innerHTML = 'Sign In / Register';
+            }
+        }
+
+        // --- 4. Config & Control (Multi-Asset) ---
+
+        // Store current config globally for reference
+        let currentConfig = null;
+
+        async function loadConfig() {
+            const cfg = await apiCall('/config');
+            if (!cfg) return;
+            currentConfig = cfg;
+
+            // Mark enabled symbols
+            const checkboxes = document.querySelectorAll('.symbol-check');
+            checkboxes.forEach(cb => {
+                const symbol = cb.value;
+                const symCfg = cfg.symbols?.[symbol];
+                cb.checked = symCfg?.enabled || false;
+            });
+
+            // Render per-asset settings for enabled symbols
+            renderAssetSettings();
+
+            // Load global settings
+            const global = cfg.global || {};
+            if (global.max_runtime_minutes !== undefined) {
+                document.getElementById('max_runtime_minutes').value = global.max_runtime_minutes;
+            }
+        }
+
+        // Render per-asset settings accordion for each checked symbol
+        function renderAssetSettings() {
+            const container = document.getElementById('asset-settings-container');
+            const checkedSymbols = Array.from(document.querySelectorAll('.symbol-check:checked')).map(cb => cb.value);
+
+            if (checkedSymbols.length === 0) {
+                container.innerHTML = `<p class="text-slate-500 text-xs text-center py-4">Select assets above to configure their settings</p>`;
+                return;
+            }
+
+            let html = '';
+            for (const symbol of checkedSymbols) {
+                const symCfg = currentConfig?.symbols?.[symbol] || {};
+                const safeId = symbol.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+
+                html += renderAssetSettingsPanel(symbol, safeId, symCfg);
+            }
+            container.innerHTML = html;
+        }
+
+        // Render a single asset's accordion settings panel (Pair Strategy)
+        function renderAssetSettingsPanel(symbol, safeId, cfg) {
+            const gridDist = cfg.grid_distance || 50;
+            const tpPips = cfg.tp_pips || 150;
+            const slPips = cfg.sl_pips || 200;
+            const pairBuyLot = cfg.pair_buy_lot || 0.01;
+            const pairSellLot = cfg.pair_sell_lot || 0.01;
+            const singleLot = cfg.single_lot || 0.01;
+            const maxPos = cfg.max_positions || 3;
+
+            return `
+            <details class="bg-slate-800/50 rounded border border-slate-700 overflow-hidden" open>
+                <summary class="px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-slate-700/50">
+                    <span class="text-sm font-medium text-blue-400">📊 ${symbol}</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="startSymbol('${symbol}')" 
+                            class="px-2 py-0.5 text-[10px] bg-green-600 hover:bg-green-700 text-white rounded">▶ Start</button>
+                        <button type="button" onclick="stopSymbol('${symbol}')"
+                            class="px-2 py-0.5 text-[10px] bg-red-600 hover:bg-red-700 text-white rounded">⏹ Stop</button>
+                    </div>
+                </summary>
+                <div class="p-3 space-y-3 border-t border-slate-700">
+                    <!-- Grid Distance & TP/SL -->
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-gray-500">Grid Distance (pips)</label>
+                            <input type="number" id="griddist_${safeId}" step="1" value="${gridDist}"
+                                class="w-full p-1.5 text-sm rounded bg-slate-900 border border-slate-600">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-green-400">TP (pips)</label>
+                            <input type="number" id="tppips_${safeId}" step="1" value="${tpPips}"
+                                class="w-full p-1.5 text-sm rounded bg-slate-900 border border-green-700/50">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-red-400">SL (pips)</label>
+                            <input type="number" id="slpips_${safeId}" step="1" value="${slPips}"
+                                class="w-full p-1.5 text-sm rounded bg-slate-900 border border-red-700/50">
+                        </div>
+                    </div>
+                    
+                    <!-- Lot Sizes -->
+                    <div>
+                        <label class="block text-[10px] text-yellow-400 mb-1">Lot Sizes</label>
+                        <div class="grid grid-cols-3 gap-1">
+                            <div>
+                                <label class="block text-[9px] text-blue-400">Pair Buy</label>
+                                <input type="number" id="pairbuy_${safeId}" step="0.01" value="${pairBuyLot}"
+                                    class="w-full p-1 text-xs rounded bg-slate-900 border border-blue-700/50 text-center">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-red-400">Pair Sell</label>
+                                <input type="number" id="pairsell_${safeId}" step="0.01" value="${pairSellLot}"
+                                    class="w-full p-1 text-xs rounded bg-slate-900 border border-red-700/50 text-center">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] text-purple-400">Single</label>
+                                <input type="number" id="single_${safeId}" step="0.01" value="${singleLot}"
+                                    class="w-full p-1 text-xs rounded bg-slate-900 border border-purple-700/50 text-center">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Max Positions -->
+                    <div>
+                        <label class="block text-[10px] text-orange-400 mb-1">Max Positions (must be multiple of 3)</label>
+                        <input type="number" id="maxpos_${safeId}" step="3" min="3" value="${maxPos}"
+                            class="w-full p-1.5 text-sm rounded bg-slate-900 border border-orange-700/50">
+                        <p class="text-[8px] text-slate-500 mt-1">Excludes initial 2 positions at center</p>
+                    </div>
+                </div>
+            </details>
+            `;
+        }
+
+        // Update lot inputs when max positions changes
+        function updateLotInputs(symbol, safeId) {
+            const maxPos = parseInt(document.getElementById(`maxpos_${safeId}`).value) || 5;
+            const container = document.getElementById(`lots_${safeId}`);
+
+            // Preserve existing values
+            const existing = [];
+            for (let i = 1; i <= 20; i++) {
+                const input = document.getElementById(`lot_${safeId}_${i}`);
+                if (input) existing.push(parseFloat(input.value) || 0.01);
+            }
+
+            let html = '';
+            for (let i = 1; i <= maxPos; i++) {
+                const val = existing[i - 1] || 0.01;
+                html += `
+                    <div>
+                        <label class="block text-[9px] text-gray-500">Lot ${i}</label>
+                        <input type="number" id="lot_${safeId}_${i}" step="0.01" value="${val}"
+                            class="w-full p-1 text-xs rounded bg-slate-900 border border-slate-600 text-center">
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        // Attach change listener to checkboxes
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.symbol-check').forEach(cb => {
+                cb.addEventListener('change', () => renderAssetSettings());
+            });
+        });
+
+        async function updateConfig(e) {
+            e.preventDefault();
+
+            // Get checked symbols
+            const checkedSymbols = Array.from(document.querySelectorAll('.symbol-check:checked')).map(cb => cb.value);
+
+            if (checkedSymbols.length === 0) {
+                alert("Please select at least one asset!");
+                return;
+            }
+
+            // Build payload with new multi-asset structure
+            const payload = {
+                global_settings: {
+                    max_runtime_minutes: parseInt(document.getElementById('max_runtime_minutes').value) || 0,
+                },
+                symbols: {}
+            };
+
+            // Get all symbols (both checked and unchecked to update enable state)
+            document.querySelectorAll('.symbol-check').forEach(cb => {
+                const symbol = cb.value;
+                const safeId = symbol.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                const isEnabled = cb.checked;
+
+                payload.symbols[symbol] = { enabled: isEnabled };
+
+                // If enabled, get its settings (Pair Strategy)
+                if (isEnabled) {
+                    payload.symbols[symbol] = {
+                        enabled: true,
+                        grid_distance: parseFloat(document.getElementById(`griddist_${safeId}`)?.value) || 50,
+                        tp_pips: parseFloat(document.getElementById(`tppips_${safeId}`)?.value) || 150,
+                        sl_pips: parseFloat(document.getElementById(`slpips_${safeId}`)?.value) || 200,
+                        pair_buy_lot: parseFloat(document.getElementById(`pairbuy_${safeId}`)?.value) || 0.01,
+                        pair_sell_lot: parseFloat(document.getElementById(`pairsell_${safeId}`)?.value) || 0.01,
+                        single_lot: parseFloat(document.getElementById(`single_${safeId}`)?.value) || 0.01,
+                        max_positions: parseInt(document.getElementById(`maxpos_${safeId}`)?.value) || 3
+                    };
+                }
+            });
+
+            console.log("Sending multi-asset config payload:", payload);
+
+            const updated = await apiCall('/config', 'POST', payload);
+            if (updated) {
+                currentConfig = updated;
+                log("⚙️ Configuration Updated.");
+                renderAssetSettings();
+            } else {
+                log("❌ Update Failed.");
+            }
+        }
+
+        // Per-symbol start/stop
+        async function startSymbol(symbol) {
+            const res = await apiCall(`/control/start/${encodeURIComponent(symbol)}`, 'POST');
+            if (res) log(`▶ Started: ${symbol}`);
+            fetchStatus();
+        }
+
+        async function stopSymbol(symbol) {
+            const res = await apiCall(`/control/stop/${encodeURIComponent(symbol)}`, 'POST');
+            if (res) log(`⏹ Stopped: ${symbol}`);
+            fetchStatus();
+        }
+
+        async function startAllSymbols() {
+            await apiCall('/control/start', 'POST');
+            log("▶ Started all enabled assets");
+            fetchStatus();
+        }
+
+        async function stopAllSymbols() {
+            await apiCall('/control/stop', 'POST');
+            log("[STOP] Graceful stop initiated - completing open positions");
+            fetchStatus();
+        }
+
+        async function terminateSymbol(symbol) {
+            const res = await apiCall(`/control/terminate/${encodeURIComponent(symbol)}`, 'POST');
+            if (res) log(`[TERMINATED] ${symbol} - All positions closed`);
+            fetchStatus();
+        }
+
+        async function terminateAllSymbols() {
+            log('[TERMINATE ALL] Closing all positions...');
+            const res = await apiCall('/control/terminate-all', 'POST');
+            if (res) log('[TERMINATED ALL] All positions closed for all assets');
+            fetchStatus();
+        }
+
+        async function toggleBot() {
+            const btn = document.getElementById('toggle-btn');
+            const action = btn.textContent.includes('Start') ? 'start' : 'stop';
+            await apiCall(`/control/${action}`, 'POST');
+            fetchStatus();
+        }
+
+        async function fetchStatus() {
+            if (!sessionToken) return;
+            const status = await apiCall('/status');
+            if (!status) return;
+
+            document.getElementById('price-display').textContent = status.current_price ? status.current_price.toFixed(2) : '---';
+            // Use open_positions from backend (Source of Truth)
+            document.getElementById('pos-count').textContent = status.open_positions || 0;
+
+            // Display internal state
+            const stateLabel = document.getElementById('cycle-state');
+            if (status.is_resetting) stateLabel.textContent = "♻️ Resetting...";
+            else if (status.running) stateLabel.textContent = `⚡ Active (Iteration ${status.iteration})`;
+            else stateLabel.textContent = "💤 Idle";
+
+            // Update Buttons
+            const statusBadge = document.getElementById('status-badge');
+            const toggleBtn = document.getElementById('toggle-btn');
+
+            if (status.graceful_stop) {
+                // GRACEFUL STOP IN PROGRESS - show yellow "Stopping..." state
+                statusBadge.innerHTML = '<div class="h-2 w-2 rounded-full bg-yellow-400 animate-pulse"></div> Stopping...';
+                statusBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-500 border border-yellow-500/20";
+                toggleBtn.textContent = "Stopping...";
+                toggleBtn.className = "px-4 py-1.5 bg-yellow-600 text-white text-sm font-medium rounded cursor-not-allowed opacity-75";
+                toggleBtn.disabled = true;
+                if (lastRunningState !== 'stopping') log("⏳ Graceful stop in progress - completing open positions...");
+                lastRunningState = 'stopping';
+            } else if (status.running) {
+                statusBadge.innerHTML = '<div class="h-2 w-2 rounded-full bg-green-400 animate-pulse"></div> Active';
+                statusBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20";
+                toggleBtn.textContent = "Stop Bot";
+                toggleBtn.className = "px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded";
+                toggleBtn.disabled = false;
+                if (lastRunningState !== true) log(`🚀 Bot Running. Step ${status.step}`);
+                lastRunningState = true;
+            } else {
+                statusBadge.innerHTML = '<div class="h-2 w-2 rounded-full bg-slate-400"></div> Offline';
+                statusBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
+                toggleBtn.textContent = "Start Bot";
+                toggleBtn.className = "px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded";
+                toggleBtn.disabled = false;
+                if (lastRunningState && lastRunningState !== false) log("🛑 Bot Stopped.");
+                lastRunningState = false;
+            }
+        }
+
+        async function logout() {
+            await supabaseClient.auth.signOut();
+            sessionToken = null;
+            log("Signed out successfully.");
+            setLoggedOutState();
+        }
+        function startPolling() { if (updateInterval) clearInterval(updateInterval); updateInterval = setInterval(fetchStatus, 1000); }
+        function log(msg) {
+            const logs = document.getElementById('logs');
+            const time = new Date().toLocaleTimeString();
+            logs.innerHTML = `<div class="mb-1"><span class="text-slate-500">[${time}]</span> ${msg}</div>` + logs.innerHTML;
+        }
+
+        // --- History Functions ---
+        async function loadHistory() {
+            const container = document.getElementById('history-list');
+            container.innerHTML = '<p class="text-slate-400 text-sm text-center py-2">Loading...</p>';
+
+            const sessions = await apiCall('/history');
+            if (!sessions || sessions.length === 0) {
+                container.innerHTML = '<p class="text-slate-500 text-sm text-center py-4">No session history found</p>';
+                return;
+            }
+
+            container.innerHTML = sessions.map(s => `
+                <div class="flex justify-between items-center p-2 bg-slate-900 rounded border border-slate-700">
+                    <span class="text-sm text-slate-300">${s.name}</span>
+                    <div class="flex gap-2">
+                        <button onclick="viewSession('${s.id}')" class="text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded">View</button>
+                        <button onclick="downloadSession('${s.id}', '${s.name}')" class="text-xs bg-green-600 hover:bg-green-700 px-2 py-1 rounded">Download</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Helper for fetching text content (since apiCall expects JSON)
+        async function fetchText(endpoint) {
+            const { data } = await supabaseClient.auth.getSession();
+            const token = data.session?.access_token;
+            if (!token) return null;
+
+            try {
+                const res = await fetch(BASE_URL + endpoint, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401) {
+                    supabaseClient.auth.signOut();
+                    setLoggedOutState();
+                    return null;
+                }
+                if (!res.ok) return null;
+                return await res.text();
+            } catch (e) {
+                console.error("Text Fetch Error:", e);
+                return null;
+            }
+        }
+
+        async function viewSession(sessionId) {
+            const content = await fetchText(`/history/${sessionId}`);
+            if (content) {
+                const win = window.open('', '_blank', 'width=800,height=600');
+                win.document.write(`<html><head><title>Session Log</title><style>body{background:#1e293b;color:#94a3b8;font-family:monospace;padding:20px;white-space:pre-wrap;}</style></head><body>${content}</body></html>`);
+            }
+        }
+
+        async function downloadSession(sessionId, filename) {
+            const content = await fetchText(`/history/${sessionId}`);
+            if (content) {
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename || `${sessionId}.txt`;
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        // --- Group Log Functions ---
+        async function loadGroupLogs() {
+            const container = document.getElementById('group-logs-list');
+            container.innerHTML = '<p class="text-slate-400 text-sm text-center py-2">Loading...</p>';
+
+            const logs = await apiCall('/history/groups');
+            if (!logs || logs.length === 0) {
+                container.innerHTML = '<p class="text-slate-500 text-sm text-center py-4">No group logs found</p>';
+                return;
+            }
+
+            container.innerHTML = logs.map(log => `
+                <div class="flex justify-between items-center p-2 bg-slate-900 rounded border border-slate-700">
+                    <span class="text-sm text-slate-300">${log.name}</span>
+                    <div class="flex gap-2">
+                        <button onclick="viewGroupLog('${log.name}')" class="text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded">View</button>
+                        <button onclick="downloadGroupLog('${log.name}')" class="text-xs bg-green-600 hover:bg-green-700 px-2 py-1 rounded">Download</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function viewGroupLog(filename) {
+            const content = await fetchText(`/history/groups/${encodeURIComponent(filename)}`);
+            if (content) {
+                const win = window.open('', '_blank', 'width=1000,height=700');
+                win.document.write(`<html><head><title>Group Log - ${filename}</title><style>body{background:#1e293b;color:#94a3b8;font-family:monospace;padding:20px;white-space:pre-wrap;}</style></head><body>${content}</body></html>`);
+            }
+        }
+
+        async function downloadGroupLog(filename) {
+            const content = await fetchText(`/history/groups/${encodeURIComponent(filename)}`);
+            if (content) {
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        // Start
+        initSupabase();
+    </script>
+</body>
+
+</html>
