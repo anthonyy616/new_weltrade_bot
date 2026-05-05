@@ -102,6 +102,61 @@ class GridBounceStrategyEngine:
     @property
     def max_positions(self) -> int:
         return int(self.config.get('max_positions', 3))
+
+    @property
+    def group_count(self) -> int:
+        return max(1, self.max_positions // 3)
+
+    @property
+    def pair_buy_lots(self) -> List[float]:
+        lots = self.config.get('pair_buy_lots')
+        if isinstance(lots, list) and lots:
+            parsed = [max(0.01, float(x)) for x in lots]
+        else:
+            parsed = [max(0.01, float(self.config.get('pair_buy_lot', 0.01)))]
+        need = self.group_count + 1  # center + each 3-position group
+        if len(parsed) < need:
+            parsed += [parsed[-1]] * (need - len(parsed))
+        return parsed[:need]
+
+    @property
+    def pair_sell_lots(self) -> List[float]:
+        lots = self.config.get('pair_sell_lots')
+        if isinstance(lots, list) and lots:
+            parsed = [max(0.01, float(x)) for x in lots]
+        else:
+            parsed = [max(0.01, float(self.config.get('pair_sell_lot', 0.01)))]
+        need = self.group_count + 1
+        if len(parsed) < need:
+            parsed += [parsed[-1]] * (need - len(parsed))
+        return parsed[:need]
+
+    @property
+    def single_lots(self) -> List[float]:
+        lots = self.config.get('single_lots')
+        if isinstance(lots, list) and lots:
+            parsed = [max(0.01, float(x)) for x in lots]
+        else:
+            parsed = [max(0.01, float(self.config.get('single_lot', 0.01)))]
+        need = self.group_count
+        if len(parsed) < need:
+            parsed += [parsed[-1]] * (need - len(parsed))
+        return parsed[:need]
+
+    def _pair_buy_lot_for_stage(self, stage_idx: int) -> float:
+        lots = self.pair_buy_lots
+        idx = max(0, min(stage_idx, len(lots) - 1))
+        return lots[idx]
+
+    def _pair_sell_lot_for_stage(self, stage_idx: int) -> float:
+        lots = self.pair_sell_lots
+        idx = max(0, min(stage_idx, len(lots) - 1))
+        return lots[idx]
+
+    def _single_lot_for_group(self, group_idx: int) -> float:
+        lots = self.single_lots
+        idx = max(0, min(group_idx, len(lots) - 1))
+        return lots[idx]
     
     @property
     def pair_buy_lot(self) -> float:
@@ -162,11 +217,13 @@ class GridBounceStrategyEngine:
         self.activity_log.log_start(self.state.cycle_count, center)
         
         # Open initial pair at center
+        center_buy_lot = self._pair_buy_lot_for_stage(0)
+        center_sell_lot = self._pair_sell_lot_for_stage(0)
         buy_ticket, buy_entry = await self._execute_market_order(
-            "buy", self.pair_buy_lot, "CenterBuy", center
+            "buy", center_buy_lot, "CenterBuy", center
         )
         sell_ticket, sell_entry = await self._execute_market_order(
-            "sell", self.pair_sell_lot, "CenterSell", center
+            "sell", center_sell_lot, "CenterSell", center
         )
         
         # Store in grid_level_1
@@ -177,13 +234,13 @@ class GridBounceStrategyEngine:
                 'entry': buy_entry,
                 'tp': buy_entry + self.tp_pips,
                 'sl': buy_entry - self.sl_pips,
-                'lot': self.pair_buy_lot
+                'lot': center_buy_lot
             }
             self.state.ticket_map[buy_ticket] = self.state.grid_level_1.positions[buy_ticket]
             self._init_touch_flags(buy_ticket)
             self.activity_log.log_fire(
                 self.state.cycle_count, "CenterBuy", buy_entry, 
-                self.pair_buy_lot, buy_entry + self.tp_pips, 
+                center_buy_lot, buy_entry + self.tp_pips, 
                 buy_entry - self.sl_pips, buy_ticket
             )
         
@@ -194,13 +251,13 @@ class GridBounceStrategyEngine:
                 'entry': sell_entry,
                 'tp': sell_entry - self.tp_pips,
                 'sl': sell_entry + self.sl_pips,
-                'lot': self.pair_sell_lot
+                'lot': center_sell_lot
             }
             self.state.ticket_map[sell_ticket] = self.state.grid_level_1.positions[sell_ticket]
             self._init_touch_flags(sell_ticket)
             self.activity_log.log_fire(
                 self.state.cycle_count, "CenterSell", sell_entry,
-                self.pair_sell_lot, sell_entry - self.tp_pips,
+                center_sell_lot, sell_entry - self.tp_pips,
                 sell_entry + self.sl_pips, sell_ticket
             )
         
@@ -476,9 +533,17 @@ class GridBounceStrategyEngine:
         target_price = grid_level.price
         open_count = 0
         
+        # Stage index: 0=center pair, 1=first adaptive pair, 2=second adaptive pair...
+        pair_stage = (self.state.position_counter // 3) + 1
+        single_group = self.state.position_counter // 3
+
+        pair_buy_lot = self._pair_buy_lot_for_stage(pair_stage)
+        pair_sell_lot = self._pair_sell_lot_for_stage(pair_stage)
+        single_lot = self._single_lot_for_group(single_group)
+
         # Open Pair Buy
         buy_ticket, buy_entry = await self._execute_market_order(
-            "buy", self.pair_buy_lot, "PairBuy", target_price
+            "buy", pair_buy_lot, "PairBuy", target_price
         )
         if buy_ticket:
             open_count += 1
@@ -488,19 +553,19 @@ class GridBounceStrategyEngine:
                 'entry': buy_entry,
                 'tp': buy_entry + self.tp_pips,
                 'sl': buy_entry - self.sl_pips,
-                'lot': self.pair_buy_lot
+                'lot': pair_buy_lot
             }
             self.state.ticket_map[buy_ticket] = grid_level.positions[buy_ticket]
             self._init_touch_flags(buy_ticket)
             self.activity_log.log_fire(
                 self.state.cycle_count, "PairBuy", buy_entry,
-                self.pair_buy_lot, buy_entry + self.tp_pips,
+                pair_buy_lot, buy_entry + self.tp_pips,
                 buy_entry - self.sl_pips, buy_ticket
             )
         
         # Open Pair Sell
         sell_ticket, sell_entry = await self._execute_market_order(
-            "sell", self.pair_sell_lot, "PairSell", target_price
+            "sell", pair_sell_lot, "PairSell", target_price
         )
         if sell_ticket:
             open_count += 1
@@ -510,13 +575,13 @@ class GridBounceStrategyEngine:
                 'entry': sell_entry,
                 'tp': sell_entry - self.tp_pips,
                 'sl': sell_entry + self.sl_pips,
-                'lot': self.pair_sell_lot
+                'lot': pair_sell_lot
             }
             self.state.ticket_map[sell_ticket] = grid_level.positions[sell_ticket]
             self._init_touch_flags(sell_ticket)
             self.activity_log.log_fire(
                 self.state.cycle_count, "PairSell", sell_entry,
-                self.pair_sell_lot, sell_entry - self.tp_pips,
+                pair_sell_lot, sell_entry - self.tp_pips,
                 sell_entry + self.sl_pips, sell_ticket
             )
         
@@ -524,7 +589,7 @@ class GridBounceStrategyEngine:
         if direction == "UP":
             # Moving UP -> Single BUY
             single_ticket, single_entry = await self._execute_market_order(
-                "buy", self.single_lot, "SingleBuy", target_price
+                "buy", single_lot, "SingleBuy", target_price
             )
             if single_ticket:
                 open_count += 1
@@ -534,20 +599,20 @@ class GridBounceStrategyEngine:
                     'entry': single_entry,
                     'tp': single_entry + self.tp_pips,
                     'sl': single_entry - self.sl_pips,
-                    'lot': self.single_lot
+                    'lot': single_lot
                 }
                 self.state.ticket_map[single_ticket] = grid_level.positions[single_ticket]
                 self._init_touch_flags(single_ticket)
                 self.activity_log.log_fire(
                     self.state.cycle_count, "SingleBuy", single_entry,
-                    self.single_lot, single_entry + self.tp_pips,
+                    single_lot, single_entry + self.tp_pips,
                     single_entry - self.sl_pips, single_ticket
                 )
         
         elif direction == "DOWN":
             # Moving DOWN -> Single SELL
             single_ticket, single_entry = await self._execute_market_order(
-                "sell", self.single_lot, "SingleSell", target_price
+                "sell", single_lot, "SingleSell", target_price
             )
             if single_ticket:
                 open_count += 1
@@ -557,13 +622,13 @@ class GridBounceStrategyEngine:
                     'entry': single_entry,
                     'tp': single_entry - self.tp_pips,
                     'sl': single_entry + self.sl_pips,
-                    'lot': self.single_lot
+                    'lot': single_lot
                 }
                 self.state.ticket_map[single_ticket] = grid_level.positions[single_ticket]
                 self._init_touch_flags(single_ticket)
                 self.activity_log.log_fire(
                     self.state.cycle_count, "SingleSell", single_entry,
-                    self.single_lot, single_entry - self.tp_pips,
+                    single_lot, single_entry - self.tp_pips,
                     single_entry + self.sl_pips, single_ticket
                 )
         

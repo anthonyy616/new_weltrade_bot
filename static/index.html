@@ -418,6 +418,8 @@
 
         // Store current config globally for reference
         let currentConfig = null;
+        // Per-panel initial lots used when (re)building adaptive lot inputs.
+        let lotInitialBySafeId = {};
 
         async function loadConfig() {
             const cfg = await apiCall('/config');
@@ -453,13 +455,34 @@
             }
 
             let html = '';
+            lotInitialBySafeId = {};
+            const safeIds = [];
             for (const symbol of checkedSymbols) {
                 const symCfg = currentConfig?.symbols?.[symbol] || {};
                 const safeId = symbol.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-
+                const maxPos = Math.max(3, Math.min(18, parseInt(symCfg.max_positions || 3)));
+                const groups = Math.max(1, Math.floor(maxPos / 3));
+                const rawPairBuy = Array.isArray(symCfg.pair_buy_lots) ? symCfg.pair_buy_lots : [symCfg.pair_buy_lot || 0.01];
+                const rawPairSell = Array.isArray(symCfg.pair_sell_lots) ? symCfg.pair_sell_lots : [symCfg.pair_sell_lot || 0.01];
+                const rawSingle = Array.isArray(symCfg.single_lots) ? symCfg.single_lots : [symCfg.single_lot || 0.01];
+                const pairBuy = [...rawPairBuy];
+                const pairSell = [...rawPairSell];
+                const single = [...rawSingle];
+                while (pairBuy.length < groups + 1) pairBuy.push(pairBuy[pairBuy.length - 1] ?? 0.01);
+                while (pairSell.length < groups + 1) pairSell.push(pairSell[pairSell.length - 1] ?? 0.01);
+                while (single.length < groups) single.push(single[single.length - 1] ?? 0.01);
+                lotInitialBySafeId[safeId] = {
+                    pair_buy_lots: pairBuy.slice(0, groups + 1),
+                    pair_sell_lots: pairSell.slice(0, groups + 1),
+                    single_lots: single.slice(0, groups),
+                };
+                safeIds.push({ symbol, safeId });
                 html += renderAssetSettingsPanel(symbol, safeId, symCfg);
             }
             container.innerHTML = html;
+
+            // Initialize lot group inputs for each rendered panel
+            for (const s of safeIds) updateLotInputs(s.symbol, s.safeId);
         }
 
         // Render a single asset's accordion settings panel (Grid Bounce Strategy)
@@ -467,9 +490,6 @@
             const gridDist = cfg.grid_distance || 50;
             const tpPips = cfg.tp_pips || 150;
             const slPips = cfg.sl_pips || 200;
-            const pairBuyLot = cfg.pair_buy_lot || 0.01;
-            const pairSellLot = cfg.pair_sell_lot || 0.01;
-            const singleLot = cfg.single_lot || 0.01;
             const maxPos = cfg.max_positions || 3;
 
             return `
@@ -503,32 +523,17 @@
                         </div>
                     </div>
                     
-                    <!-- Lot Sizes -->
+                    <!-- Lot Sizes: rendered as grouped inputs based on max positions -->
                     <div>
-                        <label class="block text-[8px] sm:text-[10px] text-yellow-400 mb-1">Lot Sizes</label>
-                        <div class="grid grid-cols-3 gap-1">
-                            <div>
-                                <label class="block text-[7px] sm:text-[9px] text-blue-400">Buy</label>
-                                <input type="number" id="pairbuy_${safeId}" step="0.01" value="${pairBuyLot}"
-                                    class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-blue-700/50 text-center">
-                            </div>
-                            <div>
-                                <label class="block text-[7px] sm:text-[9px] text-red-400">Sell</label>
-                                <input type="number" id="pairsell_${safeId}" step="0.01" value="${pairSellLot}"
-                                    class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-red-700/50 text-center">
-                            </div>
-                            <div>
-                                <label class="block text-[7px] sm:text-[9px] text-purple-400">Single</label>
-                                <input type="number" id="single_${safeId}" step="0.01" value="${singleLot}"
-                                    class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-purple-700/50 text-center">
-                            </div>
-                        </div>
+                        <label class="block text-[8px] sm:text-[10px] text-yellow-400 mb-1">Lot Sizes (groups)</label>
+                        <div id="lot_groups_${safeId}" class="space-y-2"></div>
                     </div>
 
                     <!-- Max Positions -->
                     <div>
                         <label class="block text-[8px] sm:text-[10px] text-orange-400 mb-1">Max Pos (×3)</label>
-                        <input type="number" id="maxpos_${safeId}" step="3" min="3" value="${maxPos}"
+                        <input type="number" id="maxpos_${safeId}" step="3" min="3" max="18" value="${maxPos}"
+                            onchange="updateLotInputs('${symbol}','${safeId}')"
                             class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-slate-900 border border-orange-700/50">
                     </div>
                 </div>
@@ -538,27 +543,92 @@
 
         // Update lot inputs when max positions changes
         function updateLotInputs(symbol, safeId) {
-            const maxPos = parseInt(document.getElementById(`maxpos_${safeId}`).value) || 5;
-            const container = document.getElementById(`lots_${safeId}`);
+            const maxPosEl = document.getElementById(`maxpos_${safeId}`);
+            const rawMaxPos = parseInt(maxPosEl.value) || 3;
+            const maxPos = Math.max(3, Math.min(18, rawMaxPos));
+            maxPosEl.value = String(maxPos);
+            const groups = Math.max(1, Math.floor(maxPos / 3));
+            const container = document.getElementById(`lot_groups_${safeId}`);
+            if (!container) return;
 
-            // Preserve existing values
-            const existing = [];
-            for (let i = 1; i <= 20; i++) {
-                const input = document.getElementById(`lot_${safeId}_${i}`);
-                if (input) existing.push(parseFloat(input.value) || 0.01);
+            const initial = lotInitialBySafeId[safeId] || {
+                pair_buy_lots: [0.01],
+                pair_sell_lots: [0.01],
+                single_lots: [0.01],
+            };
+            const pairBuyInit = initial.pair_buy_lots || [0.01];
+            const pairSellInit = initial.pair_sell_lots || [0.01];
+            const singleInit = initial.single_lots || [0.01];
+
+            // Preserve existing values if inputs exist
+            const existingPairBuy = [];
+            const existingPairSell = [];
+            const existingSingle = [];
+            for (let i = 0; i < 20; i++) {
+                const pb = document.getElementById(`pairbuy_${safeId}_${i+1}`);
+                const ps = document.getElementById(`pairsell_${safeId}_${i+1}`);
+                const s = document.getElementById(`single_${safeId}_${i+1}`);
+                if (pb) existingPairBuy.push(parseFloat(pb.value) || 0.01);
+                if (ps) existingPairSell.push(parseFloat(ps.value) || 0.01);
+                if (s) existingSingle.push(parseFloat(s.value) || 0.01);
+            }
+
+            function ordinal(n) {
+                if (n % 10 === 1 && n % 100 !== 11) return `${n}st`;
+                if (n % 10 === 2 && n % 100 !== 12) return `${n}nd`;
+                if (n % 10 === 3 && n % 100 !== 13) return `${n}rd`;
+                return `${n}th`;
             }
 
             let html = '';
-            for (let i = 1; i <= maxPos; i++) {
-                const val = existing[i - 1] || 0.01;
-                html += `
+            // Center pair first (1st Buy/Sell), then adaptive rows with Pair (2nd+) and Single (1st+)
+            const centerBuy = existingPairBuy[0] ?? pairBuyInit[0] ?? 0.01;
+            const centerSell = existingPairSell[0] ?? pairSellInit[0] ?? 0.01;
+            html += `
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 items-end">
                     <div>
-                        <label class="block text-[9px] text-gray-500">Lot ${i}</label>
-                        <input type="number" id="lot_${safeId}_${i}" step="0.01" value="${val}"
-                            class="w-full p-1 text-xs rounded bg-slate-900 border border-slate-600 text-center">
+                        <label class="block text-[8px] text-blue-400">1st Buy</label>
+                        <input type="number" id="pairbuy_${safeId}_1" step="0.01" value="${centerBuy}"
+                            class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-blue-700/50 text-center">
+                    </div>
+                    <div>
+                        <label class="block text-[8px] text-red-400">1st Sell</label>
+                        <input type="number" id="pairsell_${safeId}_1" step="0.01" value="${centerSell}"
+                            class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-red-700/50 text-center">
+                    </div>
+                    <div></div>
+                </div>
+            `;
+
+            for (let g = 0; g < groups; g++) {
+                const pairIdx = g + 1; // 2nd pair uses index 2 in inputs
+                const inputIdx = g + 2;
+                const pbVal = existingPairBuy[inputIdx - 1] ?? pairBuyInit[pairIdx] ?? pairBuyInit[pairBuyInit.length - 1] ?? 0.01;
+                const psVal = existingPairSell[inputIdx - 1] ?? pairSellInit[pairIdx] ?? pairSellInit[pairSellInit.length - 1] ?? 0.01;
+                const sVal = existingSingle[g] ?? singleInit[g] ?? singleInit[singleInit.length - 1] ?? 0.01;
+                const singleLabel = `${ordinal(g + 1)} single`;
+
+                html += `
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 items-end">
+                        <div>
+                            <label class="block text-[8px] text-blue-400">${ordinal(inputIdx)} Buy</label>
+                            <input type="number" id="pairbuy_${safeId}_${inputIdx}" step="0.01" value="${pbVal}"
+                                class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-blue-700/50 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-[8px] text-red-400">${ordinal(inputIdx)} Sell</label>
+                            <input type="number" id="pairsell_${safeId}_${inputIdx}" step="0.01" value="${psVal}"
+                                class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-red-700/50 text-center">
+                        </div>
+                        <div>
+                            <label class="block text-[8px] text-purple-400">${singleLabel}</label>
+                            <input type="number" id="single_${safeId}_${g+1}" step="0.01" value="${sVal}"
+                                class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-purple-700/50 text-center">
+                        </div>
                     </div>
                 `;
             }
+
             container.innerHTML = html;
         }
 
@@ -598,15 +668,31 @@
 
                 // If enabled, get its settings (Grid Bounce Strategy)
                 if (isEnabled) {
+                    const maxPosRaw = parseInt(document.getElementById(`maxpos_${safeId}`)?.value) || 3;
+                    const maxPosVal = Math.max(3, Math.min(18, maxPosRaw));
+                    const groups = Math.max(1, Math.floor(maxPosVal / 3));
+                    const pairBuyArr = [];
+                    const pairSellArr = [];
+                    const singleArr = [];
+                    // Pair arrays include center pair + each adaptive group pair
+                    for (let p = 1; p <= groups + 1; p++) {
+                        pairBuyArr.push(parseFloat(document.getElementById(`pairbuy_${safeId}_${p}`)?.value) || parseFloat(document.getElementById(`pairbuy_${safeId}`)?.value) || 0.01);
+                        pairSellArr.push(parseFloat(document.getElementById(`pairsell_${safeId}_${p}`)?.value) || parseFloat(document.getElementById(`pairsell_${safeId}`)?.value) || 0.01);
+                    }
+                    // Single arrays include one value per adaptive group
+                    for (let g = 0; g < groups; g++) {
+                        singleArr.push(parseFloat(document.getElementById(`single_${safeId}_${g+1}`)?.value) || parseFloat(document.getElementById(`single_${safeId}`)?.value) || 0.01);
+                    }
+
                     payload.symbols[symbol] = {
                         enabled: true,
                         grid_distance: parseFloat(document.getElementById(`griddist_${safeId}`)?.value) || 50,
                         tp_pips: parseFloat(document.getElementById(`tppips_${safeId}`)?.value) || 150,
                         sl_pips: parseFloat(document.getElementById(`slpips_${safeId}`)?.value) || 200,
-                        pair_buy_lot: parseFloat(document.getElementById(`pairbuy_${safeId}`)?.value) || 0.01,
-                        pair_sell_lot: parseFloat(document.getElementById(`pairsell_${safeId}`)?.value) || 0.01,
-                        single_lot: parseFloat(document.getElementById(`single_${safeId}`)?.value) || 0.01,
-                        max_positions: parseInt(document.getElementById(`maxpos_${safeId}`)?.value) || 3
+                        pair_buy_lots: pairBuyArr,
+                        pair_sell_lots: pairSellArr,
+                        single_lots: singleArr,
+                        max_positions: maxPosVal
                     };
                 }
             });

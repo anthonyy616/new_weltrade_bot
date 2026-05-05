@@ -1,6 +1,6 @@
 {
     "global": {
-        "max_runtime_minutes": 5
+        "max_runtime_minutes": 30
     },
     "symbols": {
         "FX Vol 20": {
@@ -11,7 +11,24 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.02,
-            "max_positions": 12
+            "max_positions": 9,
+            "pair_buy_lots": [
+                0.01,
+                0.01,
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01,
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.02,
+                0.02,
+                0.02
+            ]
         },
         "FX Vol 40": {
             "enabled": false,
@@ -21,7 +38,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "FX Vol 60": {
             "enabled": false,
@@ -31,7 +59,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "FX Vol 80": {
             "enabled": false,
@@ -41,7 +80,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "FX Vol 99": {
             "enabled": false,
@@ -51,7 +101,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "SFX Vol 20": {
             "enabled": false,
@@ -61,7 +122,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "SFX Vol 40": {
             "enabled": false,
@@ -71,7 +143,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "SFX Vol 60": {
             "enabled": false,
@@ -81,7 +164,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "SFX Vol 80": {
             "enabled": false,
@@ -91,7 +185,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "SFX Vol 99": {
             "enabled": false,
@@ -101,7 +206,18 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3
+            "max_positions": 3,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ]
         },
         "FlipX 1": {
             "enabled": false,

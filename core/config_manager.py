@@ -26,9 +26,11 @@ def get_default_symbol_config() -> Dict[str, Any]:
           "grid_distance": 50.0,       # Pips between grid levels
           "tp_pips": 150.0,            # TP distance for all positions
           "sl_pips": 200.0,            # SL distance for all positions
-          "pair_buy_lot": 0.01,        # Lot size for Pair Buy positions
-          "pair_sell_lot": 0.01,       # Lot size for Pair Sell positions
-          "single_lot": 0.01,          # Lot size for Single Buy/Sell
+          # Pair arrays include center pair + one entry per 3-position group.
+          # single_lots include one entry per 3-position group.
+          "pair_buy_lots": [0.01, 0.01],
+          "pair_sell_lots": [0.01, 0.01],
+          "single_lots": [0.01],
           "max_positions": 3,          # Must be multiple of 3 (3, 6, 9, etc.)
       }
 
@@ -113,7 +115,14 @@ class ConfigManager:
                 
                 # Migrate lot sizes (old format was center_lot_first, etc.)
                 max_pos = sym_cfg["max_positions"]
-                sym_cfg["lot_sizes"] = [0.01] * max_pos
+                groups = max(1, int(max_pos) // 3)
+                # pair_* arrays: center + groups. single_* arrays: groups.
+                base_pair_buy = old_config.get("pair_buy_lot", 0.01)
+                base_pair_sell = old_config.get("pair_sell_lot", 0.01)
+                base_single = old_config.get("single_lot", 0.01)
+                sym_cfg["pair_buy_lots"] = [float(base_pair_buy)] * (groups + 1)
+                sym_cfg["pair_sell_lots"] = [float(base_pair_sell)] * (groups + 1)
+                sym_cfg["single_lots"] = [float(base_single)] * groups
                 
         return new_config
 
@@ -137,28 +146,66 @@ class ConfigManager:
         if "symbols" in new_config:
             for symbol, sym_cfg in new_config["symbols"].items():
                 if symbol in self.config["symbols"]:
+                    # Merge provided fields
                     self.config["symbols"][symbol].update(sym_cfg)
-                    
+
                     # Validate grid_distance: must be > 0
                     grid_dist = self.config["symbols"][symbol].get("grid_distance", 50.0)
                     self.config["symbols"][symbol]["grid_distance"] = max(1.0, float(grid_dist))
-                    
+
                     # Validate tp_pips and sl_pips: must be > 0
                     tp = self.config["symbols"][symbol].get("tp_pips", 150.0)
                     sl = self.config["symbols"][symbol].get("sl_pips", 200.0)
                     self.config["symbols"][symbol]["tp_pips"] = max(1.0, float(tp))
                     self.config["symbols"][symbol]["sl_pips"] = max(1.0, float(sl))
-                    
-                    # Validate lot sizes: all must be > 0, default to 0.01
-                    for lot_field in ["pair_buy_lot", "pair_sell_lot", "single_lot"]:
-                        lot_val = self.config["symbols"][symbol].get(lot_field, 0.01)
-                        self.config["symbols"][symbol][lot_field] = max(0.01, float(lot_val))
 
-                    # Validate max_positions is multiple of 3
+                    # Validate and normalize max_positions
                     max_pos = int(self.config["symbols"][symbol].get("max_positions", 3))
+                    # Clamp between 3 and MAX_POSITION_LIMIT
+                    max_pos = max(3, min(MAX_POSITION_LIMIT, max_pos))
                     if max_pos % 3 != 0:
                         raise ValueError(f"max_positions must be multiple of 3, got {max_pos}")
                     self.config["symbols"][symbol]["max_positions"] = max_pos
+
+                    groups = max(1, max_pos // 3)
+                    pair_len = groups + 1
+
+                    # Normalize lot arrays: accept either scalar fields or new arrays
+                    # Priority: provided arrays in new_config -> existing arrays -> scalar fields -> default
+                    # Pair Buy (center + groups)
+                    if "pair_buy_lots" in sym_cfg and isinstance(sym_cfg["pair_buy_lots"], list):
+                        arr = [max(0.01, float(x)) for x in sym_cfg["pair_buy_lots"]]
+                    else:
+                        # Scalar fallback
+                        scalar = sym_cfg.get("pair_buy_lot", self.config["symbols"][symbol].get("pair_buy_lots", [0.01])[0])
+                        arr = [max(0.01, float(scalar))] * pair_len
+                    # Pad/trim to groups
+                    if len(arr) < pair_len:
+                        arr += [arr[-1]] * (pair_len - len(arr))
+                    arr = arr[:pair_len]
+                    self.config["symbols"][symbol]["pair_buy_lots"] = arr
+
+                    # Pair Sell (center + groups)
+                    if "pair_sell_lots" in sym_cfg and isinstance(sym_cfg["pair_sell_lots"], list):
+                        arr = [max(0.01, float(x)) for x in sym_cfg["pair_sell_lots"]]
+                    else:
+                        scalar = sym_cfg.get("pair_sell_lot", self.config["symbols"][symbol].get("pair_sell_lots", [0.01])[0])
+                        arr = [max(0.01, float(scalar))] * pair_len
+                    if len(arr) < pair_len:
+                        arr += [arr[-1]] * (pair_len - len(arr))
+                    arr = arr[:pair_len]
+                    self.config["symbols"][symbol]["pair_sell_lots"] = arr
+
+                    # Single
+                    if "single_lots" in sym_cfg and isinstance(sym_cfg["single_lots"], list):
+                        arr = [max(0.01, float(x)) for x in sym_cfg["single_lots"]]
+                    else:
+                        scalar = sym_cfg.get("single_lot", self.config["symbols"][symbol].get("single_lots", [0.01])[0])
+                        arr = [max(0.01, float(scalar))] * groups
+                    if len(arr) < groups:
+                        arr += [arr[-1]] * (groups - len(arr))
+                    arr = arr[:groups]
+                    self.config["symbols"][symbol]["single_lots"] = arr
         
         self.save_config()
         return self.config

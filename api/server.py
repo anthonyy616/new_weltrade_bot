@@ -69,9 +69,14 @@ class SymbolConfig(BaseModel):
     grid_distance: Optional[float] = None
     tp_pips: Optional[float] = None
     sl_pips: Optional[float] = None
+    # Legacy scalar lots (backward compatibility)
     pair_buy_lot: Optional[float] = None
     pair_sell_lot: Optional[float] = None
     single_lot: Optional[float] = None
+    # New adaptive lot arrays
+    pair_buy_lots: Optional[List[float]] = None
+    pair_sell_lots: Optional[List[float]] = None
+    single_lots: Optional[List[float]] = None
     max_positions: Optional[int] = None
 
 class GlobalConfig(BaseModel):
