@@ -562,8 +562,14 @@ class GridBounceStrategyEngine:
         single_lot = self._single_lot_for_group(single_group)
 
         # Open Pair Buy
+        # When direction="DOWN", this will be the unpaired buy (gets custom buy TP/SL)
+        # When direction="UP", this is part of pair (uses global TP/SL)
+        tp_override_buy = self.second_entry_buy_tp_pips if direction == "DOWN" else None
+        sl_override_buy = self.second_entry_buy_sl_pips if direction == "DOWN" else None
         buy_ticket, buy_entry, buy_tp, buy_sl = await self._execute_market_order(
-            "buy", pair_buy_lot, "PairBuy", target_price
+            "buy", pair_buy_lot, "PairBuy", target_price,
+            tp_pips_override=tp_override_buy,
+            sl_pips_override=sl_override_buy
         )
         if buy_ticket:
             open_count += 1
@@ -584,8 +590,14 @@ class GridBounceStrategyEngine:
             )
         
         # Open Pair Sell
+        # When direction="UP", this will be the unpaired sell (gets custom sell TP/SL)
+        # When direction="DOWN", this is part of pair (uses global TP/SL)
+        tp_override_sell = self.second_entry_sell_tp_pips if direction == "UP" else None
+        sl_override_sell = self.second_entry_sell_sl_pips if direction == "UP" else None
         sell_ticket, sell_entry, sell_tp, sell_sl = await self._execute_market_order(
-            "sell", pair_sell_lot, "PairSell", target_price
+            "sell", pair_sell_lot, "PairSell", target_price,
+            tp_pips_override=tp_override_sell,
+            sl_pips_override=sl_override_sell
         )
         if sell_ticket:
             open_count += 1
@@ -607,12 +619,9 @@ class GridBounceStrategyEngine:
         
         # Open Single (direction-dependent)
         if direction == "UP":
-            # Moving UP -> Single BUY (uses 2nd entry buy TP/SL)
-            # pass pip offsets (not absolute prices) so engine computes TP/SL relative to execution
+            # Moving UP -> Single BUY (uses global TP/SL, paired sell already has custom sell TP/SL above)
             single_ticket, single_entry, single_tp, single_sl = await self._execute_market_order(
-                "buy", single_lot, "SingleBuy", target_price,
-                tp_pips_override=self.second_entry_buy_tp_pips,
-                sl_pips_override=self.second_entry_buy_sl_pips
+                "buy", single_lot, "SingleBuy", target_price
             )
             if single_ticket:
                 open_count += 1
@@ -633,11 +642,9 @@ class GridBounceStrategyEngine:
                 )
 
         elif direction == "DOWN":
-            # Moving DOWN -> Single SELL (uses 2nd entry sell TP/SL)
+            # Moving DOWN -> Single SELL (uses global TP/SL, paired buy already has custom buy TP/SL above)
             single_ticket, single_entry, single_tp, single_sl = await self._execute_market_order(
-                "sell", single_lot, "SingleSell", target_price,
-                tp_pips_override=self.second_entry_sell_tp_pips,
-                sl_pips_override=self.second_entry_sell_sl_pips
+                "sell", single_lot, "SingleSell", target_price
             )
             if single_ticket:
                 open_count += 1
