@@ -1,44 +1,31 @@
 {
     "global": {
-        "max_runtime_minutes": 60
+        "max_runtime_minutes": 0
     },
     "symbols": {
         "FX Vol 20": {
-            "enabled": true,
-            "grid_distance": 25.0,
-            "tp_pips": 25.0,
-            "sl_pips": 50.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.02,
-            "max_positions": 9,
+            "enabled": false,
+            "grid_distance": 50.0,
+            "tp_pips": 150.0,
+            "sl_pips": 200.0,
             "pair_buy_lots": [
                 0.01,
-                0.02,
-                0.03,
-                0.04
+                0.01
             ],
             "pair_sell_lots": [
                 0.01,
-                0.02,
-                0.03,
-                0.04
+                0.01
             ],
             "single_lots": [
-                0.25,
-                0.35,
-                0.45
-            ]
+                0.01
+            ],
+            "max_positions": 3
         },
         "FX Vol 40": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -49,17 +36,14 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "FX Vol 60": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -70,17 +54,14 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "FX Vol 80": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -91,17 +72,14 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "FX Vol 99": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -112,17 +90,14 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "SFX Vol 20": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -133,17 +108,14 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "SFX Vol 40": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -154,17 +126,14 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "SFX Vol 60": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -175,17 +144,14 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "SFX Vol 80": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -196,17 +162,14 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "SFX Vol 99": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
-            "max_positions": 3,
             "pair_buy_lots": [
                 0.01,
                 0.01
@@ -217,16 +180,25 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "max_positions": 3
         },
         "FlipX 1": {
             "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "FlipX 2": {
@@ -234,9 +206,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "FlipX 3": {
@@ -244,9 +224,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "FlipX 4": {
@@ -254,9 +242,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "FlipX 5": {
@@ -264,9 +260,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "PainX 400": {
@@ -274,9 +278,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "PainX 600": {
@@ -284,9 +296,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "PainX 800": {
@@ -294,9 +314,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "PainX 999": {
@@ -304,9 +332,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "PainX 1200": {
@@ -314,9 +350,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "GainX 400": {
@@ -324,9 +368,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "GainX 600": {
@@ -334,9 +386,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "GainX 800": {
@@ -344,9 +404,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "GainX 999": {
@@ -354,9 +422,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "GainX 1200": {
@@ -364,9 +440,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "SwitchX 600": {
@@ -374,9 +458,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "SwitchX 1200": {
@@ -384,9 +476,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "SwitchX 1800": {
@@ -394,9 +494,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "BreakX 1200": {
@@ -404,9 +512,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         },
         "BreakX 1800": {
@@ -414,9 +530,17 @@
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
-            "pair_buy_lot": 0.01,
-            "pair_sell_lot": 0.01,
-            "single_lot": 0.01,
+            "pair_buy_lots": [
+                0.01,
+                0.01
+            ],
+            "pair_sell_lots": [
+                0.01,
+                0.01
+            ],
+            "single_lots": [
+                0.01
+            ],
             "max_positions": 3
         }
     }
