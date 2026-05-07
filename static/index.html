@@ -476,6 +476,11 @@
                     pair_buy_lots: pairBuy.slice(0, groups + 1),
                     pair_sell_lots: pairSell.slice(0, groups + 1),
                     single_lots: single.slice(0, groups),
+                    // second-entry defaults (directional single TP/SL)
+                    second_entry_buy_tp_pips: symCfg.second_entry_buy_tp_pips || 150,
+                    second_entry_buy_sl_pips: symCfg.second_entry_buy_sl_pips || 200,
+                    second_entry_sell_tp_pips: symCfg.second_entry_sell_tp_pips || 150,
+                    second_entry_sell_sl_pips: symCfg.second_entry_sell_sl_pips || 200,
                 };
                 safeIds.push({ symbol, safeId });
                 html += renderAssetSettingsPanel(symbol, safeId, symCfg);
@@ -492,6 +497,10 @@
             const tpPips = cfg.tp_pips || 150;
             const slPips = cfg.sl_pips || 200;
             const maxPos = cfg.max_positions || 3;
+            const secondBuyTp = cfg.second_entry_buy_tp_pips || 150;
+            const secondBuySl = cfg.second_entry_buy_sl_pips || 200;
+            const secondSellTp = cfg.second_entry_sell_tp_pips || 150;
+            const secondSellSl = cfg.second_entry_sell_sl_pips || 200;
 
             return `
             <details class="bg-slate-800/50 rounded border border-slate-700 overflow-hidden" open>
@@ -528,6 +537,28 @@
                     <div>
                         <label class="block text-[8px] sm:text-[10px] text-yellow-400 mb-1">Lot Sizes (groups)</label>
                         <div id="lot_groups_${safeId}" class="space-y-2"></div>
+                    </div>
+
+                    <!-- 2nd Entry: directional single TP/SL overrides -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div class="p-2 bg-slate-900 rounded border border-slate-700">
+                            <div class="text-xs text-green-300 mb-1">2nd Entry — Buy (single BUY leg)</div>
+                            <label class="block text-[8px] text-green-400">TP (pips)</label>
+                            <input type="number" id="second_entry_buy_tp_${safeId}" step="1" value="${secondBuyTp}"
+                                class="w-full p-1 text-xs rounded bg-slate-900 border border-green-700/50">
+                            <label class="block text-[8px] text-red-400 mt-1">SL (pips)</label>
+                            <input type="number" id="second_entry_buy_sl_${safeId}" step="1" value="${secondBuySl}"
+                                class="w-full p-1 text-xs rounded bg-slate-900 border border-red-700/50">
+                        </div>
+                        <div class="p-2 bg-slate-900 rounded border border-slate-700">
+                            <div class="text-xs text-pink-300 mb-1">2nd Entry — Sell (single SELL leg)</div>
+                            <label class="block text-[8px] text-green-400">TP (pips)</label>
+                            <input type="number" id="second_entry_sell_tp_${safeId}" step="1" value="${secondSellTp}"
+                                class="w-full p-1 text-xs rounded bg-slate-900 border border-green-700/50">
+                            <label class="block text-[8px] text-red-400 mt-1">SL (pips)</label>
+                            <input type="number" id="second_entry_sell_sl_${safeId}" step="1" value="${secondSellSl}"
+                                class="w-full p-1 text-xs rounded bg-slate-900 border border-red-700/50">
+                        </div>
                     </div>
 
                     <!-- Max Positions -->
@@ -690,6 +721,11 @@
                         grid_distance: parseFloat(document.getElementById(`griddist_${safeId}`)?.value) || 50,
                         tp_pips: parseFloat(document.getElementById(`tppips_${safeId}`)?.value) || 150,
                         sl_pips: parseFloat(document.getElementById(`slpips_${safeId}`)?.value) || 200,
+                        // 2nd entry directional TP/SL
+                        second_entry_buy_tp_pips: parseFloat(document.getElementById(`second_entry_buy_tp_${safeId}`)?.value) || 150,
+                        second_entry_buy_sl_pips: parseFloat(document.getElementById(`second_entry_buy_sl_${safeId}`)?.value) || 200,
+                        second_entry_sell_tp_pips: parseFloat(document.getElementById(`second_entry_sell_tp_${safeId}`)?.value) || 150,
+                        second_entry_sell_sl_pips: parseFloat(document.getElementById(`second_entry_sell_sl_${safeId}`)?.value) || 200,
                         pair_buy_lots: pairBuyArr,
                         pair_sell_lots: pairSellArr,
                         single_lots: singleArr,

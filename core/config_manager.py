@@ -26,6 +26,11 @@ def get_default_symbol_config() -> Dict[str, Any]:
           "grid_distance": 50.0,       # Pips between grid levels
           "tp_pips": 150.0,            # TP distance for all positions
           "sl_pips": 200.0,            # SL distance for all positions
+          # Second-entry (directional single) TP/SL overrides (per-symbol)
+          "second_entry_buy_tp_pips": 150.0,
+          "second_entry_buy_sl_pips": 200.0,
+          "second_entry_sell_tp_pips": 150.0,
+          "second_entry_sell_sl_pips": 200.0,
           # Pair arrays include center pair + one entry per 3-position group.
           # single_lots include one entry per 3-position group.
           "pair_buy_lots": [0.01, 0.01],
@@ -158,6 +163,31 @@ class ConfigManager:
                     sl = self.config["symbols"][symbol].get("sl_pips", 200.0)
                     self.config["symbols"][symbol]["tp_pips"] = max(1.0, float(tp))
                     self.config["symbols"][symbol]["sl_pips"] = max(1.0, float(sl))
+
+                    # Validate and set second-entry (directional single) TP/SL values
+                    # Accept provided values or fall back to existing/defaults
+                    seb_tp = sym_cfg.get("second_entry_buy_tp_pips", self.config["symbols"][symbol].get("second_entry_buy_tp_pips", 150.0))
+                    seb_sl = sym_cfg.get("second_entry_buy_sl_pips", self.config["symbols"][symbol].get("second_entry_buy_sl_pips", 200.0))
+                    ses_tp = sym_cfg.get("second_entry_sell_tp_pips", self.config["symbols"][symbol].get("second_entry_sell_tp_pips", 150.0))
+                    ses_sl = sym_cfg.get("second_entry_sell_sl_pips", self.config["symbols"][symbol].get("second_entry_sell_sl_pips", 200.0))
+
+                    # Clamp sensible ranges (1 - 5000 pips)
+                    try:
+                        self.config["symbols"][symbol]["second_entry_buy_tp_pips"] = max(1.0, min(5000.0, float(seb_tp)))
+                    except Exception:
+                        self.config["symbols"][symbol]["second_entry_buy_tp_pips"] = 150.0
+                    try:
+                        self.config["symbols"][symbol]["second_entry_buy_sl_pips"] = max(1.0, min(5000.0, float(seb_sl)))
+                    except Exception:
+                        self.config["symbols"][symbol]["second_entry_buy_sl_pips"] = 200.0
+                    try:
+                        self.config["symbols"][symbol]["second_entry_sell_tp_pips"] = max(1.0, min(5000.0, float(ses_tp)))
+                    except Exception:
+                        self.config["symbols"][symbol]["second_entry_sell_tp_pips"] = 150.0
+                    try:
+                        self.config["symbols"][symbol]["second_entry_sell_sl_pips"] = max(1.0, min(5000.0, float(ses_sl)))
+                    except Exception:
+                        self.config["symbols"][symbol]["second_entry_sell_sl_pips"] = 200.0
 
                     # Validate and normalize max_positions
                     max_pos = int(self.config["symbols"][symbol].get("max_positions", 3))

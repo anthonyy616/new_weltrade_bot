@@ -177,6 +177,26 @@ class GridBounceStrategyEngine:
     @property
     def sl_pips(self) -> float:
         return float(self.config.get('sl_pips', 200.0))
+    
+    @property
+    def second_entry_buy_tp_pips(self) -> float:
+        """TP pips for unpaired BUY single trades (2nd entry system)"""
+        return float(self.config.get('second_entry_buy_tp_pips', self.tp_pips))
+    
+    @property
+    def second_entry_buy_sl_pips(self) -> float:
+        """SL pips for unpaired BUY single trades (2nd entry system)"""
+        return float(self.config.get('second_entry_buy_sl_pips', self.sl_pips))
+    
+    @property
+    def second_entry_sell_tp_pips(self) -> float:
+        """TP pips for unpaired SELL single trades (2nd entry system)"""
+        return float(self.config.get('second_entry_sell_tp_pips', self.tp_pips))
+    
+    @property
+    def second_entry_sell_sl_pips(self) -> float:
+        """SL pips for unpaired SELL single trades (2nd entry system)"""
+        return float(self.config.get('second_entry_sell_sl_pips', self.sl_pips))
 
     @property
     def current_price(self) -> float:
@@ -587,49 +607,53 @@ class GridBounceStrategyEngine:
         
         # Open Single (direction-dependent)
         if direction == "UP":
-            # Moving UP -> Single BUY
+            # Moving UP -> Single BUY (uses 2nd entry buy TP/SL)
             single_ticket, single_entry = await self._execute_market_order(
                 "buy", single_lot, "SingleBuy", target_price
             )
             if single_ticket:
                 open_count += 1
+                single_tp = single_entry + self.second_entry_buy_tp_pips
+                single_sl = single_entry - self.second_entry_buy_sl_pips
                 grid_level.positions[single_ticket] = {
                     'leg': 'SingleBuy',
                     'direction': 'buy',
                     'entry': single_entry,
-                    'tp': single_entry + self.tp_pips,
-                    'sl': single_entry - self.sl_pips,
+                    'tp': single_tp,
+                    'sl': single_sl,
                     'lot': single_lot
                 }
                 self.state.ticket_map[single_ticket] = grid_level.positions[single_ticket]
                 self._init_touch_flags(single_ticket)
                 self.activity_log.log_fire(
                     self.state.cycle_count, "SingleBuy", single_entry,
-                    single_lot, single_entry + self.tp_pips,
-                    single_entry - self.sl_pips, single_ticket
+                    single_lot, single_tp,
+                    single_sl, single_ticket
                 )
         
         elif direction == "DOWN":
-            # Moving DOWN -> Single SELL
+            # Moving DOWN -> Single SELL (uses 2nd entry sell TP/SL)
             single_ticket, single_entry = await self._execute_market_order(
                 "sell", single_lot, "SingleSell", target_price
             )
             if single_ticket:
                 open_count += 1
+                single_tp = single_entry - self.second_entry_sell_tp_pips
+                single_sl = single_entry + self.second_entry_sell_sl_pips
                 grid_level.positions[single_ticket] = {
                     'leg': 'SingleSell',
                     'direction': 'sell',
                     'entry': single_entry,
-                    'tp': single_entry - self.tp_pips,
-                    'sl': single_entry + self.sl_pips,
+                    'tp': single_tp,
+                    'sl': single_sl,
                     'lot': single_lot
                 }
                 self.state.ticket_map[single_ticket] = grid_level.positions[single_ticket]
                 self._init_touch_flags(single_ticket)
                 self.activity_log.log_fire(
                     self.state.cycle_count, "SingleSell", single_entry,
-                    single_lot, single_entry - self.tp_pips,
-                    single_entry + self.sl_pips, single_ticket
+                    single_lot, single_tp,
+                    single_sl, single_ticket
                 )
         
         self.state.total_positions += open_count
@@ -877,7 +901,9 @@ class GridBounceStrategyEngine:
 
 
     async def _execute_market_order(self, direction: str, lot_size: float,
-                                    leg_name: str, target_price: float) -> Tuple[int, float]:
+                                    leg_name: str, target_price: float,
+                                    tp_override: Optional[float] = None,
+                                    sl_override: Optional[float] = None) -> Tuple[int, float]:
         """
         PRESERVED FROM ORIGINAL (with minor modifications)
         Send market order to MT5, returns (ticket, entry_price)
@@ -890,14 +916,14 @@ class GridBounceStrategyEngine:
         # Determine execution parameters
         if direction == "buy":
             exec_price = tick.ask
-            tp = exec_price + self.tp_pips
-            sl = exec_price - self.sl_pips
+            tp = tp_override if tp_override is not None else (exec_price + self.tp_pips)
+            sl = sl_override if sl_override is not None else (exec_price - self.sl_pips)
             order_type = mt5.ORDER_TYPE_BUY
             check_price = tick.bid
         else:
             exec_price = tick.bid
-            tp = exec_price - self.tp_pips
-            sl = exec_price + self.sl_pips
+            tp = tp_override if tp_override is not None else (exec_price - self.tp_pips)
+            sl = sl_override if sl_override is not None else (exec_price + self.sl_pips)
             order_type = mt5.ORDER_TYPE_SELL
             check_price = tick.ask
         

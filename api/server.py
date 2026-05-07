@@ -69,6 +69,11 @@ class SymbolConfig(BaseModel):
     grid_distance: Optional[float] = None
     tp_pips: Optional[float] = None
     sl_pips: Optional[float] = None
+    # Second-entry directional single TP/SL (per-symbol)
+    second_entry_buy_tp_pips: Optional[float] = None
+    second_entry_buy_sl_pips: Optional[float] = None
+    second_entry_sell_tp_pips: Optional[float] = None
+    second_entry_sell_sl_pips: Optional[float] = None
     # Legacy scalar lots (backward compatibility)
     pair_buy_lot: Optional[float] = None
     pair_sell_lot: Optional[float] = None
