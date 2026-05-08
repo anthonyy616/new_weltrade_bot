@@ -319,14 +319,14 @@ async def stop_all(bot = Depends(get_current_bot)):
 @app.post("/control/start/{symbol}")
 async def start_symbol(symbol: str, bot = Depends(get_current_bot)):
     """Start a specific symbol"""
-    await _prepare_fresh_session(bot)
-    deleted = await _delete_db_file()
+    #await _prepare_fresh_session(bot)
+    #deleted = await _delete_db_file()
 
-    if not deleted and os.path.exists(DB_PATH):
-        raise HTTPException(
-            status_code=409,
-            detail="DB file is still locked after closing the bot session. Stop the process holding the file and try again."
-        )
+    #if not deleted and os.path.exists(DB_PATH):
+        #raise HTTPException(
+            #status_code=409,
+            #detail="DB file is still locked after closing the bot session. Stop the process holding the file and try again."
+        #)
     
     # [FIX] Auto-Restart Trading Engine if stopped
     if not trading_engine.running:
