@@ -254,7 +254,8 @@ class GridBounceStrategyEngine:
                 'entry': buy_entry,
                 'tp': buy_tp,
                 'sl': buy_sl,
-                'lot': center_buy_lot
+                'lot': center_buy_lot,
+                'position_type': 'pair'
             }
             self.state.ticket_map[buy_ticket] = self.state.grid_level_1.positions[buy_ticket]
             self._init_touch_flags(buy_ticket)
@@ -271,7 +272,8 @@ class GridBounceStrategyEngine:
                 'entry': sell_entry,
                 'tp': sell_tp,
                 'sl': sell_sl,
-                'lot': center_sell_lot
+                'lot': center_sell_lot,
+                'position_type': 'pair'
             }
             self.state.ticket_map[sell_ticket] = self.state.grid_level_1.positions[sell_ticket]
             self._init_touch_flags(sell_ticket)
@@ -579,7 +581,9 @@ class GridBounceStrategyEngine:
                 'entry': buy_entry,
                 'tp': buy_tp,
                 'sl': buy_sl,
-                'lot': pair_buy_lot
+                'lot': pair_buy_lot,
+                # When moving DOWN the PairBuy is the unpaired leg using custom buy TP/SL
+                'position_type': 'single_custom' if direction == "DOWN" else 'pair'
             }
             self.state.ticket_map[buy_ticket] = grid_level.positions[buy_ticket]
             self._init_touch_flags(buy_ticket)
@@ -607,7 +611,9 @@ class GridBounceStrategyEngine:
                 'entry': sell_entry,
                 'tp': sell_tp,
                 'sl': sell_sl,
-                'lot': pair_sell_lot
+                'lot': pair_sell_lot,
+                # When moving UP the PairSell is the unpaired leg using custom sell TP/SL
+                'position_type': 'single_custom' if direction == "UP" else 'pair'
             }
             self.state.ticket_map[sell_ticket] = grid_level.positions[sell_ticket]
             self._init_touch_flags(sell_ticket)
@@ -625,13 +631,15 @@ class GridBounceStrategyEngine:
             )
             if single_ticket:
                 open_count += 1
+                # The explicit SingleBuy here is part of the pair triple and uses default TP/SL
                 grid_level.positions[single_ticket] = {
                     'leg': 'SingleBuy',
                     'direction': 'buy',
                     'entry': single_entry,
                     'tp': single_tp,
                     'sl': single_sl,
-                    'lot': single_lot
+                    'lot': single_lot,
+                    'position_type': 'pair'
                 }
                 self.state.ticket_map[single_ticket] = grid_level.positions[single_ticket]
                 self._init_touch_flags(single_ticket)
@@ -648,13 +656,15 @@ class GridBounceStrategyEngine:
             )
             if single_ticket:
                 open_count += 1
+                # The explicit SingleSell here is part of the pair triple and uses default TP/SL
                 grid_level.positions[single_ticket] = {
                     'leg': 'SingleSell',
                     'direction': 'sell',
                     'entry': single_entry,
                     'tp': single_tp,
                     'sl': single_sl,
-                    'lot': single_lot
+                    'lot': single_lot,
+                    'position_type': 'pair'
                 }
                 self.state.ticket_map[single_ticket] = grid_level.positions[single_ticket]
                 self._init_touch_flags(single_ticket)
@@ -700,6 +710,10 @@ class GridBounceStrategyEngine:
     async def _check_position_drops(self, ask: float, bid: float):
         """
         PRESERVED FROM ORIGINAL - Detect positions closed by MT5 (TP/SL hit)
+        
+        NEW BEHAVIOR: Selective nuclear reset based on position_type
+        - Custom singles (position_type='single_custom') close without triggering reset
+        - Pair positions (position_type='pair') trigger nuclear reset
         """
         positions = mt5.positions_get(symbol=self.symbol)
         current_tickets = set()
@@ -709,8 +723,6 @@ class GridBounceStrategyEngine:
         
         tracked_tickets = set(self.state.ticket_map.keys())
         dropped = tracked_tickets - current_tickets
-        if dropped:
-            self._position_drop_detected = True
         
         for ticket in dropped:
             info = self.state.ticket_map.get(ticket)
@@ -723,6 +735,7 @@ class GridBounceStrategyEngine:
             tp_price = info.get("tp", 0)
             sl_price = info.get("sl", 0)
             lot = info.get("lot", 0)
+            position_type = info.get("position_type", "pair")  # Default to 'pair' for safety
             
             # Determine TP or SL using touch flags
             flags = self.state.ticket_touch_flags.get(ticket, {})
@@ -746,17 +759,24 @@ class GridBounceStrategyEngine:
             
             self.state.realized_pnl += realized
             
-            # Log
+            # Determine if this closure triggers reset
+            triggers_reset = (position_type == 'pair')
+            
+            # Log with reset trigger indicator
             if is_tp:
-                self.activity_log.log_tp_hit(ticket, leg, close_price, realized, "")
+                self.activity_log.log_tp_hit(ticket, leg, close_price, realized, "", triggered_reset=triggers_reset)
             else:
-                self.activity_log.log_sl_hit(ticket, leg, close_price, realized)
+                self.activity_log.log_sl_hit(ticket, leg, close_price, realized, triggered_reset=triggers_reset)
             
             # Remove from tracking
             self._remove_ticket_from_all_levels(ticket)
             
-            # Decrement total
+            # Decrement total (for both pair and custom singles)
             self.state.total_positions -= 1
+            
+            # Set reset flag ONLY for pair positions
+            if triggers_reset:
+                self._position_drop_detected = True
         
         if dropped:
             await self.save_state()
@@ -849,7 +869,13 @@ class GridBounceStrategyEngine:
 
 
     def _remove_ticket_from_all_levels(self, ticket: int):
-        """Remove ticket from all grid levels and global tracking"""
+        """Remove ticket from all grid levels and global tracking
+        
+        Position counter logic:
+        - Pair positions: decrement position_counter (counts toward max_positions)
+        - Custom single positions: DO NOT decrement position_counter (user requirement)
+        - Center positions: always keep position_counter as-is
+        """
         info = self.state.ticket_map.get(ticket)
         if self.state.grid_level_1 and ticket in self.state.grid_level_1.positions:
             del self.state.grid_level_1.positions[ticket]
@@ -859,8 +885,19 @@ class GridBounceStrategyEngine:
             del self.state.ticket_map[ticket]
         if ticket in self.state.ticket_touch_flags:
             del self.state.ticket_touch_flags[ticket]
-        if info and info.get("leg") not in {"CenterBuy", "CenterSell"} and self.state.position_counter > 0:
-            self.state.position_counter -= 1
+        
+        # Only decrement position_counter for pair positions (not center, not custom singles)
+        if info:
+            leg = info.get("leg", "")
+            position_type = info.get("position_type", "pair")
+            
+            # Center positions don't decrement position_counter
+            if leg in {"CenterBuy", "CenterSell"}:
+                pass  # Do nothing
+            # Pair positions decrement position_counter
+            elif position_type == "pair" and self.state.position_counter > 0:
+                self.state.position_counter -= 1
+            # Custom single positions DO NOT decrement position_counter (per user requirement)
 
 
     def _init_touch_flags(self, ticket: int):

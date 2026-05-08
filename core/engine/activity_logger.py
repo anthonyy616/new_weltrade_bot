@@ -113,22 +113,32 @@ class ActivityLogger:
     # ========================
 
     def log_tp_hit(self, ticket: int, leg: str, tp_price: float,
-                   realized_pnl: float, action: str = ""):
-        """Log a take profit hit"""
+                   realized_pnl: float, action: str = "", triggered_reset: bool = False):
+        """Log a take profit hit
+        
+        Args:
+            triggered_reset: If True, indicates this closure triggered a nuclear reset
+        """
         friendly = self._friendly_leg(leg)
         result = "profit" if realized_pnl >= 0 else "loss"
+        reset_status = " - **Nuclear reset triggered**" if triggered_reset else " - Grid continues"
         self._write(
             f"{friendly} hit TP @ {tp_price:.5f}  |  "
-            f"Result: ${realized_pnl:+.2f} ({result})"
+            f"Result: ${realized_pnl:+.2f} ({result}){reset_status}"
         )
 
     def log_sl_hit(self, ticket: int, leg: str, sl_price: float,
-                   realized_pnl: float):
-        """Log a stop loss hit"""
+                   realized_pnl: float, triggered_reset: bool = False):
+        """Log a stop loss hit
+        
+        Args:
+            triggered_reset: If True, indicates this closure triggered a nuclear reset
+        """
         friendly = self._friendly_leg(leg)
+        reset_status = " - **Nuclear reset triggered**" if triggered_reset else " - Grid continues"
         self._write(
             f"{friendly} hit SL @ {sl_price:.5f}  |  "
-            f"Result: ${realized_pnl:+.2f} (loss)"
+            f"Result: ${realized_pnl:+.2f} (loss){reset_status}"
         )
 
     def log_single_buy_opened(self, cycle: int, price: float, lot: float,

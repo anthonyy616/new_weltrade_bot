@@ -28,7 +28,11 @@
                 0.25,
                 0.35,
                 0.45
-            ]
+            ],
+            "second_entry_buy_tp_pips": 25.0,
+            "second_entry_buy_sl_pips": 25.0,
+            "second_entry_sell_tp_pips": 25.0,
+            "second_entry_sell_sl_pips": 25.0
         },
         "FX Vol 40": {
             "enabled": false,
@@ -49,7 +53,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "FX Vol 60": {
             "enabled": false,
@@ -70,7 +78,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "FX Vol 80": {
             "enabled": false,
@@ -91,7 +103,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "FX Vol 99": {
             "enabled": false,
@@ -112,7 +128,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "SFX Vol 20": {
             "enabled": false,
@@ -133,7 +153,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "SFX Vol 40": {
             "enabled": false,
@@ -154,7 +178,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "SFX Vol 60": {
             "enabled": false,
@@ -175,7 +203,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "SFX Vol 80": {
             "enabled": false,
@@ -196,7 +228,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "SFX Vol 99": {
             "enabled": false,
@@ -217,7 +253,11 @@
             ],
             "single_lots": [
                 0.01
-            ]
+            ],
+            "second_entry_buy_tp_pips": 150.0,
+            "second_entry_buy_sl_pips": 200.0,
+            "second_entry_sell_tp_pips": 150.0,
+            "second_entry_sell_sl_pips": 200.0
         },
         "FlipX 1": {
             "enabled": false,
