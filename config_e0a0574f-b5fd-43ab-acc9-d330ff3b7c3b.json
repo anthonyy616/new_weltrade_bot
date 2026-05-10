@@ -76,14 +76,14 @@
             "second_entry_sell_sl_pips": 200.0
         },
         "FX Vol 80": {
-            "enabled": true,
+            "enabled": false,
             "grid_distance": 100.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
             "pair_buy_lots": [
                 0.02,
-                0.01,
-                0.01
+                0.02,
+                0.02
             ],
             "pair_sell_lots": [
                 0.01,
@@ -92,7 +92,7 @@
             ],
             "single_lots": [
                 0.02,
-                0.03
+                0.02
             ],
             "max_positions": 6,
             "second_entry_buy_tp_pips": 100.0,

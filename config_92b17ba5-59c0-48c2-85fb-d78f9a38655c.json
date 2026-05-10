@@ -1,6 +1,6 @@
 {
     "global": {
-        "max_runtime_minutes": 2000000
+        "max_runtime_minutes": 20
     },
     "symbols": {
         "FX Vol 20": {
