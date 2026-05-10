@@ -1,7 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 
 <head>
+    <script>
+        const storedTheme = localStorage.getItem('theme');
+        if (storedTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else if (storedTheme === 'light') {
+            document.documentElement.classList.remove('dark');
+        } else {
+            localStorage.setItem('theme', 'light');
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weltrade MT5 Bot</title>
@@ -56,21 +67,33 @@
 
     <div id="dashboard" class="max-w-6xl mx-auto space-y-4 md:space-y-6 hidden">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-blue-500">Weltrade MT5 Bot</h1>
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-500">Weltrade MT5 Bot</h1>
             <div class="flex flex-wrap items-center gap-2 sm:gap-3">
                 <div id="status-badge"
                     class="flex items-center gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                     <div class="h-2 w-2 rounded-full bg-slate-400"></div> Offline
                 </div>
                 <button id="toggle-btn"
-                    class="px-3 sm:px-4 py-1 sm:py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-medium rounded"
+                    class="px-3 sm:px-4 py-1 sm:py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-medium rounded shadow-sm"
                     onclick="toggleBot()">Start Bot</button>
+                <button onclick="toggleTheme()" class="p-1.5 sm:p-2 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition" title="Toggle Theme">
+                    <svg id="theme-icon-dark" class="w-4 h-4 hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                    <svg id="theme-icon-light" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 2.32a1 1 0 011.415 0l.707.707a1 1 0 01-1.414 1.415l-.707-.707a1 1 0 010-1.415zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zm-2.32 4.22a1 1 0 010 1.415l-.707.707a1 1 0 11-1.415-1.414l.707-.707a1 1 0 011.415 0zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-4.22-2.32a1 1 0 01-1.415 0l-.707-.707a1 1 0 011.414-1.415l.707.707a1 1 0 010 1.415zM2 10a1 1 0 011-1h1a1 1 0 110 2H3a1 1 0 01-1-1zm2.32-4.22a1 1 0 010-1.415l.707-.707a1 1 0 011.415 1.414l-.707.707a1 1 0 01-1.415 0zM10 5a5 5 0 100 10 5 5 0 000-10z" clip-rule="evenodd"></path></svg>
+                </button>
                 <button onclick="logout()"
-                    class="px-2 sm:px-3 py-1 sm:py-1.5 bg-red-500/10 text-red-500 text-xs font-medium rounded border border-red-500/20">Sign Out</button>
+                    class="px-2 sm:px-3 py-1 sm:py-1.5 bg-red-500/10 text-red-600 dark:text-red-500 text-xs font-medium rounded border border-red-500/20">Sign Out</button>
             </div>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
+        <!-- Mobile Navigation -->
+        <div class="flex md:hidden bg-slate-200 dark:bg-slate-800 rounded-lg p-1 border border-slate-300 dark:border-slate-700 w-full mb-4">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="flex-1 py-1.5 text-xs font-medium rounded-md bg-white text-blue-700 dark:bg-slate-700 dark:text-blue-300 shadow-sm transition">Dashboard</button>
+            <button onclick="switchTab('config')" id="tab-config" class="flex-1 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200">Config</button>
+            <button onclick="switchTab('logs')" id="tab-logs" class="flex-1 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200">Logs</button>
+        </div>
+
+        <div id="view-dashboard" class="block md:block">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
             <div class="bg-white dark:bg-slate-800 p-2 sm:p-3 md:p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Live Price</div>
                 <div id="price-display" class="text-lg sm:text-xl md:text-2xl font-bold mt-1 tracking-tight">---</div>
@@ -94,10 +117,12 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-            <div
-                class="lg:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 md:p-5 rounded-lg border border-slate-200 dark:border-slate-700 lg:h-fit">
-                <h2 class="text-base sm:text-lg font-semibold mb-3 border-b pb-2 border-slate-700">Settings</h2>
+        </div> <!-- End view-dashboard -->
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mt-4 md:mt-6">
+            <div id="view-config"
+                class="hidden md:block lg:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 md:p-5 rounded-lg border border-slate-200 dark:border-slate-700 lg:h-fit shadow-sm">
+                <h2 class="text-base sm:text-lg font-semibold mb-3 border-b pb-2 border-slate-200 dark:border-slate-700">Settings</h2>
                 <form onsubmit="updateConfig(event)" class="space-y-4">
 
                     <div class="space-y-4">
@@ -227,13 +252,11 @@
                     </p>
                 </form>
             </div>
-                        <div class="p-3 border border-slate-700 rounded bg-slate-900/30">
-                            <label class="block text-xs font-bold text-slate-400 mb-2"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 inline-block mr-1 text-purple-500"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-1.1 1.92-1.1 2.22 0l.2.737a1 1 0 0 0 .948.738l.77-.04c1.17-.06 1.66 1.352.65 1.92l-.635.313a1 1 0 0 0-.364 1.364l.29.53c.52.95-.2 2.09-1.34 2.09h-.86a1 1 0 0 0-.94.667l-.25.66c-.35.93-1.7.93-2.05 0l-.25-.66a1 1 0 0 0-.94-.667h-.86c-1.14 0-1.86-1.14-1.34-2.09l.29-.53a1 1 0 0 0-.364-1.364L4.99 6.272c-1.01-.568-.52-1.98.65-1.92l.77.04a1 1 0 0 0 .948-.738l.2-.737z"/></svg> Global Settings</label>
-                            <div class="grid grid-cols-2 gap-2">
 
-            <div
-                class="lg:col-span-2 bg-white dark:bg-slate-800 p-3 sm:p-4 md:p-5 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col h-auto md:h-[400px] lg:h-[600px]">
-                <h2 class="text-base sm:text-lg font-semibold mb-2">Live Terminal</h2>
+            <div id="view-logs" class="hidden md:flex flex-col lg:col-span-2 gap-4 md:gap-6">
+                <div
+                    class="bg-white dark:bg-slate-800 p-3 sm:p-4 md:p-5 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col h-auto md:h-[400px] lg:h-[600px] shadow-sm">
+                    <h2 class="text-base sm:text-lg font-semibold mb-2">Live Terminal</h2>
                 <div id="logs"
                     class="flex-1 bg-slate-950 rounded p-2 sm:p-3 md:p-4 font-mono text-xs overflow-y-auto text-green-400 border border-slate-800">
                     <div>[System] Ready.</div>
@@ -254,6 +277,7 @@
                     <p class="text-slate-500 text-xs sm:text-sm text-center py-2 sm:py-4">Click "Refresh" to load session history</p>
                 </div>
             </div>
+            </div> <!-- End view-logs -->
 
             <!-- Group Logs Panel
             <div
@@ -617,18 +641,17 @@
             const centerBuy = existingPairBuy[0] ?? pairBuyInit[0] ?? 0.01;
             const centerSell = existingPairSell[0] ?? pairSellInit[0] ?? 0.01;
             html += `
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 items-end">
-                    <div>
-                        <label class="block text-[8px] text-blue-400">1st Buy</label>
+                <div class="flex flex-wrap items-center gap-2 mb-2">
+                    <div class="flex flex-col items-center bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-200 dark:border-blue-800/50">
+                        <label class="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">1st Buy</label>
                         <input type="number" id="pairbuy_${safeId}_1" step="0.01" value="${centerBuy}"
-                            class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-blue-700/50 text-center">
+                            class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                     </div>
-                    <div>
-                        <label class="block text-[8px] text-red-400">1st Sell</label>
+                    <div class="flex flex-col items-center bg-red-50 dark:bg-red-900/20 p-1.5 rounded border border-red-200 dark:border-red-800/50">
+                        <label class="text-[9px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">1st Sell</label>
                         <input type="number" id="pairsell_${safeId}_1" step="0.01" value="${centerSell}"
-                            class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-red-700/50 text-center">
+                            class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none">
                     </div>
-                    <div></div>
                 </div>
             `;
 
@@ -641,21 +664,21 @@
                 const singleLabel = `${ordinal(g + 1)} single`;
 
                 html += `
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 items-end">
-                        <div>
-                            <label class="block text-[8px] text-blue-400">${ordinal(inputIdx)} Buy</label>
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <div class="flex flex-col items-center bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-200 dark:border-blue-800/50">
+                            <label class="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">${ordinal(inputIdx)} Buy</label>
                             <input type="number" id="pairbuy_${safeId}_${inputIdx}" step="0.01" value="${pbVal}"
-                                class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-blue-700/50 text-center">
+                                class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                         </div>
-                        <div>
-                            <label class="block text-[8px] text-red-400">${ordinal(inputIdx)} Sell</label>
+                        <div class="flex flex-col items-center bg-red-50 dark:bg-red-900/20 p-1.5 rounded border border-red-200 dark:border-red-800/50">
+                            <label class="text-[9px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">${ordinal(inputIdx)} Sell</label>
                             <input type="number" id="pairsell_${safeId}_${inputIdx}" step="0.01" value="${psVal}"
-                                class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-red-700/50 text-center">
+                                class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none">
                         </div>
-                        <div>
-                            <label class="block text-[8px] text-purple-400">${singleLabel}</label>
+                        <div class="flex flex-col items-center bg-purple-50 dark:bg-purple-900/20 p-1.5 rounded border border-purple-200 dark:border-purple-800/50">
+                            <label class="text-[9px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-1">${singleLabel}</label>
                             <input type="number" id="single_${safeId}_${g+1}" step="0.01" value="${sVal}"
-                                class="w-full p-0.5 sm:p-1 text-xs rounded bg-slate-900 border border-purple-700/50 text-center">
+                                class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none">
                         </div>
                     </div>
                 `;
@@ -1008,6 +1031,48 @@
             }
         }
         */
+
+        // --- 5. UI Helpers ---
+        function switchTab(tabId) {
+            ['dashboard', 'config', 'logs'].forEach(id => {
+                const btn = document.getElementById(`tab-${id}`);
+                if (btn) {
+                    btn.className = id === tabId 
+                        ? "flex-1 py-1.5 text-xs font-medium rounded-md bg-white text-blue-700 dark:bg-slate-700 dark:text-blue-300 shadow-sm transition"
+                        : "flex-1 py-1.5 text-xs font-medium rounded-md text-slate-600 dark:text-slate-400 transition hover:text-slate-800 dark:hover:text-slate-200";
+                }
+                const view = document.getElementById(`view-${id}`);
+                if (view) {
+                    if (id === tabId) {
+                        view.classList.remove('hidden');
+                    } else {
+                        view.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const darkIcon = document.getElementById('theme-icon-dark');
+            const lightIcon = document.getElementById('theme-icon-light');
+            if (isDark) {
+                if (darkIcon) darkIcon.classList.add('hidden');
+                if (lightIcon) lightIcon.classList.remove('hidden');
+            } else {
+                if (lightIcon) lightIcon.classList.add('hidden');
+                if (darkIcon) darkIcon.classList.remove('hidden');
+            }
+        }
+        
+        // Setup initial theme icon state
+        document.addEventListener('DOMContentLoaded', updateThemeIcon);
 
         // Start
         initSupabase();
