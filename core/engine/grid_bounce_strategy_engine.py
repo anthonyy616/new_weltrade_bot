@@ -464,6 +464,7 @@ class GridBounceStrategyEngine:
                             self.state.grid_level_2,
                             direction="DOWN",
                             startup_sl_anchor=sl,
+                            startup_tp_anchor=tp,
                         )
         
         self.state.position_counter += 3
@@ -540,6 +541,7 @@ class GridBounceStrategyEngine:
                             self.state.grid_level_2,
                             direction="UP",
                             startup_sl_anchor=sl,
+                            startup_tp_anchor=tp,
                         )
         
         self.state.position_counter += 3
@@ -840,18 +842,28 @@ class GridBounceStrategyEngine:
                     grid_level.reference_custom_sell_sl = sl
 
     async def _apply_startup_cross_alignment(
-        self, grid_level: GridLevel, direction: str, startup_sl_anchor: float
+        self,
+        grid_level: GridLevel,
+        direction: str,
+        startup_sl_anchor: float,
+        startup_tp_anchor: float,
     ) -> None:
         """
         Force second-entry cross-line merge from startup anchor.
-        UP/BBS: pair BUY TP and custom SELL SL follow startup SELL SL.
-        DOWN/SSB: pair SELL TP and custom BUY SL follow startup BUY SL.
+        UP/BBS:
+        - pair BUY TP and custom SELL SL follow startup SELL SL
+        - pair BUY SL follows startup SELL TP
+        DOWN/SSB:
+        - pair SELL TP and custom BUY SL follow startup BUY SL
+        - pair SELL SL follows startup BUY TP
         """
         if direction == "UP":
             self._set_level_reference(grid_level, "buy", "pair", tp=float(startup_sl_anchor))
+            self._set_level_reference(grid_level, "buy", "pair", sl=float(startup_tp_anchor))
             self._set_level_reference(grid_level, "sell", "single_custom", sl=float(startup_sl_anchor))
         else:
             self._set_level_reference(grid_level, "sell", "pair", tp=float(startup_sl_anchor))
+            self._set_level_reference(grid_level, "sell", "pair", sl=float(startup_tp_anchor))
             self._set_level_reference(grid_level, "buy", "single_custom", sl=float(startup_sl_anchor))
 
         for ticket, info in list(grid_level.positions.items()):
