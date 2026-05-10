@@ -459,6 +459,12 @@ class GridBounceStrategyEngine:
                             'sl': sl,
                             'has_virtual_stops': not success,
                         })
+                    if self.state.grid_level_2:
+                        await self._apply_startup_cross_alignment(
+                            self.state.grid_level_2,
+                            direction="DOWN",
+                            startup_sl_anchor=sl,
+                        )
         
         self.state.position_counter += 3
         await self.save_state()
@@ -529,6 +535,12 @@ class GridBounceStrategyEngine:
                             'sl': sl,
                             'has_virtual_stops': not success,
                         })
+                    if self.state.grid_level_2:
+                        await self._apply_startup_cross_alignment(
+                            self.state.grid_level_2,
+                            direction="UP",
+                            startup_sl_anchor=sl,
+                        )
         
         self.state.position_counter += 3
         await self.save_state()
@@ -783,6 +795,83 @@ class GridBounceStrategyEngine:
         
         self.state.total_positions += open_count
 
+    def _get_level_reference(
+        self, grid_level: GridLevel, direction: str, position_type: str
+    ) -> Tuple[Optional[float], Optional[float]]:
+        pos_type = "single_custom" if position_type == "single_custom" else "pair"
+        if pos_type == "pair":
+            if direction == "buy":
+                return grid_level.reference_buy_tp, grid_level.reference_buy_sl
+            return grid_level.reference_sell_tp, grid_level.reference_sell_sl
+        if direction == "buy":
+            return grid_level.reference_custom_buy_tp, grid_level.reference_custom_buy_sl
+        return grid_level.reference_custom_sell_tp, grid_level.reference_custom_sell_sl
+
+    def _set_level_reference(
+        self,
+        grid_level: GridLevel,
+        direction: str,
+        position_type: str,
+        tp: Optional[float] = None,
+        sl: Optional[float] = None,
+    ) -> None:
+        pos_type = "single_custom" if position_type == "single_custom" else "pair"
+        if pos_type == "pair":
+            if direction == "buy":
+                if tp is not None:
+                    grid_level.reference_buy_tp = tp
+                if sl is not None:
+                    grid_level.reference_buy_sl = sl
+            else:
+                if tp is not None:
+                    grid_level.reference_sell_tp = tp
+                if sl is not None:
+                    grid_level.reference_sell_sl = sl
+        else:
+            if direction == "buy":
+                if tp is not None:
+                    grid_level.reference_custom_buy_tp = tp
+                if sl is not None:
+                    grid_level.reference_custom_buy_sl = sl
+            else:
+                if tp is not None:
+                    grid_level.reference_custom_sell_tp = tp
+                if sl is not None:
+                    grid_level.reference_custom_sell_sl = sl
+
+    async def _apply_startup_cross_alignment(
+        self, grid_level: GridLevel, direction: str, startup_sl_anchor: float
+    ) -> None:
+        """
+        Force second-entry cross-line merge from startup anchor.
+        UP/BBS: pair BUY TP and custom SELL SL follow startup SELL SL.
+        DOWN/SSB: pair SELL TP and custom BUY SL follow startup BUY SL.
+        """
+        if direction == "UP":
+            self._set_level_reference(grid_level, "buy", "pair", tp=float(startup_sl_anchor))
+            self._set_level_reference(grid_level, "sell", "single_custom", sl=float(startup_sl_anchor))
+        else:
+            self._set_level_reference(grid_level, "sell", "pair", tp=float(startup_sl_anchor))
+            self._set_level_reference(grid_level, "buy", "single_custom", sl=float(startup_sl_anchor))
+
+        for ticket, info in list(grid_level.positions.items()):
+            if not info:
+                continue
+            aligned_tp, aligned_sl, _ = await self._align_position_tp_sl(
+                ticket=ticket,
+                direction=info.get("direction", ""),
+                calculated_tp=float(info.get("tp", 0.0)),
+                calculated_sl=float(info.get("sl", 0.0)),
+                grid_level=grid_level,
+                position_type=info.get("position_type", "pair"),
+                has_virtual_stops=bool(info.get("has_virtual_stops", False)),
+            )
+            info["tp"] = aligned_tp
+            info["sl"] = aligned_sl
+            if ticket in self.state.ticket_map:
+                self.state.ticket_map[ticket]["tp"] = aligned_tp
+                self.state.ticket_map[ticket]["sl"] = aligned_sl
+
     async def _align_position_tp_sl(
         self,
         ticket: int,
@@ -795,37 +884,12 @@ class GridBounceStrategyEngine:
     ) -> Tuple[float, float, bool]:
         """Align position TP/SL to per-level reference values."""
         pos_type = "single_custom" if position_type == "single_custom" else "pair"
+        reference_tp, reference_sl = self._get_level_reference(grid_level, direction, pos_type)
 
-        if pos_type == "pair":
-            if direction == "buy":
-                reference_tp = grid_level.reference_buy_tp
-                reference_sl = grid_level.reference_buy_sl
-            else:
-                reference_tp = grid_level.reference_sell_tp
-                reference_sl = grid_level.reference_sell_sl
-        else:
-            if direction == "buy":
-                reference_tp = grid_level.reference_custom_buy_tp
-                reference_sl = grid_level.reference_custom_buy_sl
-            else:
-                reference_tp = grid_level.reference_custom_sell_tp
-                reference_sl = grid_level.reference_custom_sell_sl
-
-        if reference_tp is None or reference_sl is None:
-            if pos_type == "pair":
-                if direction == "buy":
-                    grid_level.reference_buy_tp = calculated_tp
-                    grid_level.reference_buy_sl = calculated_sl
-                else:
-                    grid_level.reference_sell_tp = calculated_tp
-                    grid_level.reference_sell_sl = calculated_sl
-            else:
-                if direction == "buy":
-                    grid_level.reference_custom_buy_tp = calculated_tp
-                    grid_level.reference_custom_buy_sl = calculated_sl
-                else:
-                    grid_level.reference_custom_sell_tp = calculated_tp
-                    grid_level.reference_custom_sell_sl = calculated_sl
+        if reference_tp is None and reference_sl is None:
+            self._set_level_reference(
+                grid_level, direction, pos_type, tp=float(calculated_tp), sl=float(calculated_sl)
+            )
 
             self.activity_log.log_info(
                 f"{direction.upper()} position #{ticket} set as {pos_type} reference at level "
@@ -833,12 +897,24 @@ class GridBounceStrategyEngine:
             )
             return calculated_tp, calculated_sl, False
 
-        if reference_tp == calculated_tp and reference_sl == calculated_sl:
-            return reference_tp, reference_sl, False
+        aligned_tp = reference_tp if reference_tp is not None else calculated_tp
+        aligned_sl = reference_sl if reference_sl is not None else calculated_sl
+
+        if reference_tp is None or reference_sl is None:
+            self._set_level_reference(
+                grid_level,
+                direction,
+                pos_type,
+                tp=float(aligned_tp),
+                sl=float(aligned_sl),
+            )
+
+        if aligned_tp == calculated_tp and aligned_sl == calculated_sl:
+            return aligned_tp, aligned_sl, False
 
         self.activity_log.log_info(
             f"{direction.upper()} position #{ticket} at {grid_level.price:.5f} aligning to "
-            f"{pos_type} reference: TP={reference_tp:.5f}, SL={reference_sl:.5f} "
+            f"{pos_type} reference: TP={aligned_tp:.5f}, SL={aligned_sl:.5f} "
             f"(original: TP={calculated_tp:.5f}, SL={calculated_sl:.5f})"
         )
 
@@ -846,18 +922,18 @@ class GridBounceStrategyEngine:
             self.activity_log.log_info(
                 f"Position #{ticket} has virtual stops - aligned in memory only"
             )
-            return reference_tp, reference_sl, False
+            return aligned_tp, aligned_sl, False
 
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
             "symbol": self.symbol,
             "position": ticket,
-            "sl": float(reference_sl),
-            "tp": float(reference_tp),
+            "sl": float(aligned_sl),
+            "tp": float(aligned_tp),
         }
         result = mt5.order_send(request)
         if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-            return reference_tp, reference_sl, True
+            return aligned_tp, aligned_sl, True
 
         error = result.comment if result else mt5.last_error()
         self.activity_log.log_info(
