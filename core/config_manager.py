@@ -18,7 +18,7 @@ AVAILABLE_SYMBOLS = [
     "SwitchX 600", "SwitchX 1200", "SwitchX 1800", "BreakX 1200", "BreakX 1800"
 ]
 
-MAX_POSITION_LIMIT = 18
+MAX_POSITION_LIMIT = 60
 
 def get_default_symbol_config() -> Dict[str, Any]:
       return {
@@ -36,7 +36,7 @@ def get_default_symbol_config() -> Dict[str, Any]:
           "pair_buy_lots": [0.01, 0.01],
           "pair_sell_lots": [0.01, 0.01],
           "single_lots": [0.01],
-          "max_positions": 3,          # Must be multiple of 3 (3, 6, 9, etc.)
+          "max_positions": 3,          # Effective positions; must be multiple of 3 (3..60)
       }
 
 class ConfigManager:

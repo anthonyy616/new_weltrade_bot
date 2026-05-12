@@ -533,8 +533,9 @@
             for (const symbol of checkedSymbols) {
                 const symCfg = currentConfig?.symbols?.[symbol] || {};
                 const safeId = symbol.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-                const maxPos = Math.max(3, Math.min(18, parseInt(symCfg.max_positions || 3)));
-                const groups = Math.max(1, Math.floor(maxPos / 3));
+                const effectiveMaxPos = Math.max(3, Math.min(60, parseInt(symCfg.max_positions || 3)));
+                const maxPosInput = Math.max(1, Math.min(20, Math.round(effectiveMaxPos / 3)));
+                const groups = maxPosInput;
                 const rawPairBuy = Array.isArray(symCfg.pair_buy_lots) ? symCfg.pair_buy_lots : [symCfg.pair_buy_lot || 0.01];
                 const rawPairSell = Array.isArray(symCfg.pair_sell_lots) ? symCfg.pair_sell_lots : [symCfg.pair_sell_lot || 0.01];
                 const rawSingle = Array.isArray(symCfg.single_lots) ? symCfg.single_lots : [symCfg.single_lot || 0.01];
@@ -555,7 +556,7 @@
                     second_entry_sell_sl_pips: symCfg.second_entry_sell_sl_pips || 200,
                 };
                 safeIds.push({ symbol, safeId });
-                html += renderAssetSettingsPanel(symbol, safeId, symCfg);
+                html += renderAssetSettingsPanel(symbol, safeId, symCfg, maxPosInput);
             }
             container.innerHTML = html;
 
@@ -564,15 +565,19 @@
         }
 
         // Render a single asset's accordion settings panel (Grid Bounce Strategy)
-        function renderAssetSettingsPanel(symbol, safeId, cfg) {
+        function renderAssetSettingsPanel(symbol, safeId, cfg, maxPosInput) {
             const gridDist = cfg.grid_distance || 50;
             const tpPips = cfg.tp_pips || 150;
             const slPips = cfg.sl_pips || 200;
-            const maxPos = cfg.max_positions || 3;
             const secondBuyTp = cfg.second_entry_buy_tp_pips || 150;
             const secondBuySl = cfg.second_entry_buy_sl_pips || 200;
             const secondSellTp = cfg.second_entry_sell_tp_pips || 150;
             const secondSellSl = cfg.second_entry_sell_sl_pips || 200;
+            const selectedMaxPosInput = Math.max(1, Math.min(20, parseInt(maxPosInput || 1)));
+            const maxPosOptions = Array.from({ length: 20 }, (_, i) => {
+                const value = i + 1;
+                return `<option value="${value}" ${selectedMaxPosInput === value ? 'selected' : ''}>${value}</option>`;
+            }).join('');
 
             return `
             <details class="bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-200 dark:border-slate-700 overflow-hidden" open>
@@ -635,16 +640,14 @@
 
                     <!-- Max Positions -->
                     <div>
-                        <label class="block text-[8px] sm:text-[10px] text-orange-600 dark:text-orange-400 mb-1">Max Pos (×3)</label>
+                        <label class="block text-[8px] sm:text-[10px] text-orange-600 dark:text-orange-400 mb-1">Max Pos Input (1-20, ×3)</label>
                         <select id="maxpos_${safeId}" onchange="updateLotInputs('${symbol}','${safeId}')"
                             class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-white dark:bg-slate-900 border border-orange-300 dark:border-orange-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-orange-500">
-                            <option value="3" ${maxPos === 3 ? 'selected' : ''}>3</option>
-                            <option value="6" ${maxPos === 6 ? 'selected' : ''}>6</option>
-                            <option value="9" ${maxPos === 9 ? 'selected' : ''}>9</option>
-                            <option value="12" ${maxPos === 12 ? 'selected' : ''}>12</option>
-                            <option value="15" ${maxPos === 15 ? 'selected' : ''}>15</option>
-                            <option value="18" ${maxPos === 18 ? 'selected' : ''}>18</option>
+                            ${maxPosOptions}
                         </select>
+                        <p class="mt-1 text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400">
+                            Input is a multiplier: total tracked positions = input × 3 (E.g choosing 1 here means 3 positions, 6 as input here → 18 positions, 20 here → 60 positions - all per cycle). The first 2 startup/new-cycle positions are excluded.
+                        </p>
                     </div>
                 </div>
             </details>
@@ -654,10 +657,11 @@
         // Update lot inputs when max positions changes
         function updateLotInputs(symbol, safeId) {
             const maxPosEl = document.getElementById(`maxpos_${safeId}`);
-            const rawMaxPos = parseInt(maxPosEl.value) || 3;
-            const maxPos = Math.max(3, Math.min(18, rawMaxPos));
-            maxPosEl.value = String(maxPos);
-            const groups = Math.max(1, Math.floor(maxPos / 3));
+            const rawMaxPosInput = parseInt(maxPosEl.value) || 1;
+            const maxPosInput = Math.max(1, Math.min(20, rawMaxPosInput));
+            maxPosEl.value = String(maxPosInput);
+            const effectiveMaxPos = maxPosInput * 3;
+            const groups = Math.max(1, Math.floor(effectiveMaxPos / 3));
             const container = document.getElementById(`lot_groups_${safeId}`);
             if (!container) return;
 
@@ -777,9 +781,10 @@
 
                 // If enabled, get its settings (Grid Bounce Strategy)
                 if (isEnabled) {
-                    const maxPosRaw = parseInt(document.getElementById(`maxpos_${safeId}`)?.value) || 3;
-                    const maxPosVal = Math.max(3, Math.min(18, maxPosRaw));
-                    const groups = Math.max(1, Math.floor(maxPosVal / 3));
+                    const maxPosInputRaw = parseInt(document.getElementById(`maxpos_${safeId}`)?.value) || 1;
+                    const maxPosInput = Math.max(1, Math.min(20, maxPosInputRaw));
+                    const maxPosVal = maxPosInput * 3;
+                    const groups = maxPosInput;
                     const pairBuyArr = [];
                     const pairSellArr = [];
                     const singleArr = [];

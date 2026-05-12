@@ -7,7 +7,7 @@
             "enabled": true,
             "grid_distance": 30.0,
             "tp_pips": 60.0,
-            "sl_pips": 90.0,
+            "sl_pips": 30.0,
             "pair_buy_lots": [
                 0.01,
                 0.01,

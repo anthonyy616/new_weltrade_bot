@@ -1,13 +1,13 @@
 {
     "global": {
-        "max_runtime_minutes": 20
+        "max_runtime_minutes": 180
     },
     "symbols": {
         "FX Vol 20": {
             "enabled": true,
             "grid_distance": 25.0,
-            "tp_pips": 25.0,
-            "sl_pips": 50.0,
+            "tp_pips": 30.0,
+            "sl_pips": 55.0,
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.02,
@@ -29,10 +29,10 @@
                 0.35,
                 0.45
             ],
-            "second_entry_buy_tp_pips": 25.0,
-            "second_entry_buy_sl_pips": 25.0,
-            "second_entry_sell_tp_pips": 25.0,
-            "second_entry_sell_sl_pips": 25.0
+            "second_entry_buy_tp_pips": 30.0,
+            "second_entry_buy_sl_pips": 30.0,
+            "second_entry_sell_tp_pips": 30.0,
+            "second_entry_sell_sl_pips": 30.0
         },
         "FX Vol 40": {
             "enabled": false,
