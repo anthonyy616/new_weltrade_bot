@@ -24,15 +24,25 @@ def get_default_symbol_config() -> Dict[str, Any]:
       return {
           "enabled": False,
           "grid_distance": 50.0,       # Pips between grid levels
-          "tp_pips": 150.0,            # TP distance for all positions
-          "sl_pips": 200.0,            # SL distance for all positions
-          # Second-entry (directional single) TP/SL overrides (per-symbol)
+          "tp_pips": 150.0,            # TP distance for all positions (global)
+          "sl_pips": 200.0,            # SL distance for all positions (global)
+          # Second-entry (directional single) TP/SL overrides (per-symbol, global)
           "second_entry_buy_tp_pips": 150.0,
           "second_entry_buy_sl_pips": 200.0,
           "second_entry_sell_tp_pips": 150.0,
           "second_entry_sell_sl_pips": 200.0,
-          # Pair arrays include center pair + one entry per 3-position group.
-          # single_lots include one entry per 3-position group.
+          # Sets: number of position sets (default 1)
+          "sets": 1,
+          # Sets configuration: array of {lot sizes, max_positions} per set
+          "sets_config": [
+              {
+                  "pair_buy_lots": [0.01, 0.01],
+                  "pair_sell_lots": [0.01, 0.01],
+                  "single_lots": [0.01],
+                  "max_positions": 3,
+              }
+          ],
+          # Legacy fields (kept for backward compat, not used if sets_config exists)
           "pair_buy_lots": [0.01, 0.01],
           "pair_sell_lots": [0.01, 0.01],
           "single_lots": [0.01],
@@ -142,6 +152,7 @@ class ConfigManager:
         """
         Update config with new values.
         Handles both flat updates and nested symbol updates.
+        Supports the new sets_config structure for multi-set trading.
         """
         # Handle global settings
         if "global" in new_config:
@@ -151,7 +162,7 @@ class ConfigManager:
         if "symbols" in new_config:
             for symbol, sym_cfg in new_config["symbols"].items():
                 if symbol in self.config["symbols"]:
-                    # Merge provided fields
+                    # Merge provided fields (careful not to overwrite sets_config yet)
                     self.config["symbols"][symbol].update(sym_cfg)
 
                     # Validate grid_distance: must be > 0
@@ -165,7 +176,6 @@ class ConfigManager:
                     self.config["symbols"][symbol]["sl_pips"] = max(1.0, float(sl))
 
                     # Validate and set second-entry (directional single) TP/SL values
-                    # Accept provided values or fall back to existing/defaults
                     seb_tp = sym_cfg.get("second_entry_buy_tp_pips", self.config["symbols"][symbol].get("second_entry_buy_tp_pips", 150.0))
                     seb_sl = sym_cfg.get("second_entry_buy_sl_pips", self.config["symbols"][symbol].get("second_entry_buy_sl_pips", 200.0))
                     ses_tp = sym_cfg.get("second_entry_sell_tp_pips", self.config["symbols"][symbol].get("second_entry_sell_tp_pips", 150.0))
@@ -189,53 +199,89 @@ class ConfigManager:
                     except Exception:
                         self.config["symbols"][symbol]["second_entry_sell_sl_pips"] = 200.0
 
-                    # Validate and normalize max_positions
-                    max_pos = int(self.config["symbols"][symbol].get("max_positions", 3))
-                    # Clamp between 3 and MAX_POSITION_LIMIT
-                    max_pos = max(3, min(MAX_POSITION_LIMIT, max_pos))
-                    if max_pos % 3 != 0:
-                        raise ValueError(f"max_positions must be multiple of 3, got {max_pos}")
-                    self.config["symbols"][symbol]["max_positions"] = max_pos
-
-                    groups = max(1, max_pos // 3)
-                    pair_len = groups + 1
-
-                    # Normalize lot arrays: accept either scalar fields or new arrays
-                    # Priority: provided arrays in new_config -> existing arrays -> scalar fields -> default
-                    # Pair Buy (center + groups)
-                    if "pair_buy_lots" in sym_cfg and isinstance(sym_cfg["pair_buy_lots"], list):
-                        arr = [max(0.01, float(x)) for x in sym_cfg["pair_buy_lots"]]
+                    # Handle sets configuration
+                    num_sets = int(sym_cfg.get("sets", self.config["symbols"][symbol].get("sets", 1)))
+                    num_sets = max(1, min(10, num_sets))  # Clamp 1-10 sets
+                    self.config["symbols"][symbol]["sets"] = num_sets
+                    
+                    # Initialize or rebuild sets_config
+                    if "sets_config" in sym_cfg and isinstance(sym_cfg["sets_config"], list):
+                        # User provided sets_config, use it (validate count)
+                        sets_config = sym_cfg["sets_config"][:num_sets]
                     else:
-                        # Scalar fallback
-                        scalar = sym_cfg.get("pair_buy_lot", self.config["symbols"][symbol].get("pair_buy_lots", [0.01])[0])
-                        arr = [max(0.01, float(scalar))] * pair_len
-                    # Pad/trim to groups
-                    if len(arr) < pair_len:
-                        arr += [arr[-1]] * (pair_len - len(arr))
-                    arr = arr[:pair_len]
-                    self.config["symbols"][symbol]["pair_buy_lots"] = arr
-
-                    # Pair Sell (center + groups)
-                    if "pair_sell_lots" in sym_cfg and isinstance(sym_cfg["pair_sell_lots"], list):
-                        arr = [max(0.01, float(x)) for x in sym_cfg["pair_sell_lots"]]
-                    else:
-                        scalar = sym_cfg.get("pair_sell_lot", self.config["symbols"][symbol].get("pair_sell_lots", [0.01])[0])
-                        arr = [max(0.01, float(scalar))] * pair_len
-                    if len(arr) < pair_len:
-                        arr += [arr[-1]] * (pair_len - len(arr))
-                    arr = arr[:pair_len]
-                    self.config["symbols"][symbol]["pair_sell_lots"] = arr
-
-                    # Single
-                    if "single_lots" in sym_cfg and isinstance(sym_cfg["single_lots"], list):
-                        arr = [max(0.01, float(x)) for x in sym_cfg["single_lots"]]
-                    else:
-                        scalar = sym_cfg.get("single_lot", self.config["symbols"][symbol].get("single_lots", [0.01])[0])
-                        arr = [max(0.01, float(scalar))] * groups
-                    if len(arr) < groups:
-                        arr += [arr[-1]] * (groups - len(arr))
-                    arr = arr[:groups]
-                    self.config["symbols"][symbol]["single_lots"] = arr
+                        # Rebuild sets_config from provided lot arrays or existing config
+                        sets_config = self.config["symbols"][symbol].get("sets_config", [])
+                    
+                    # Ensure we have exactly num_sets entries
+                    while len(sets_config) < num_sets:
+                        # Add default or clone last set with new max_positions
+                        if sets_config:
+                            new_set = {
+                                "pair_buy_lots": sets_config[-1]["pair_buy_lots"][:],
+                                "pair_sell_lots": sets_config[-1]["pair_sell_lots"][:],
+                                "single_lots": sets_config[-1]["single_lots"][:],
+                                "max_positions": sets_config[-1]["max_positions"],
+                            }
+                        else:
+                            new_set = {
+                                "pair_buy_lots": [0.01, 0.01],
+                                "pair_sell_lots": [0.01, 0.01],
+                                "single_lots": [0.01],
+                                "max_positions": 3,
+                            }
+                        sets_config.append(new_set)
+                    
+                    # Trim if needed
+                    sets_config = sets_config[:num_sets]
+                    
+                    # Validate and normalize each set
+                    for set_idx, set_cfg in enumerate(sets_config):
+                        # Validate max_positions for this set
+                        max_pos = int(set_cfg.get("max_positions", 3))
+                        max_pos = max(3, min(MAX_POSITION_LIMIT, max_pos))
+                        if max_pos % 3 != 0:
+                            max_pos = (max_pos // 3) * 3  # Round down to nearest multiple of 3
+                        set_cfg["max_positions"] = max_pos
+                        
+                        groups = max(1, max_pos // 3)
+                        pair_len = groups + 1
+                        
+                        # Normalize pair_buy_lots
+                        if "pair_buy_lots" in set_cfg and isinstance(set_cfg["pair_buy_lots"], list):
+                            arr = [max(0.01, float(x)) for x in set_cfg["pair_buy_lots"]]
+                        else:
+                            arr = [max(0.01, float(set_cfg.get("pair_buy_lots", [0.01])[0] if isinstance(set_cfg.get("pair_buy_lots", [0.01]), list) else set_cfg.get("pair_buy_lots", 0.01)))]
+                        if len(arr) < pair_len:
+                            arr += [arr[-1]] * (pair_len - len(arr))
+                        set_cfg["pair_buy_lots"] = arr[:pair_len]
+                        
+                        # Normalize pair_sell_lots
+                        if "pair_sell_lots" in set_cfg and isinstance(set_cfg["pair_sell_lots"], list):
+                            arr = [max(0.01, float(x)) for x in set_cfg["pair_sell_lots"]]
+                        else:
+                            arr = [max(0.01, float(set_cfg.get("pair_sell_lots", [0.01])[0] if isinstance(set_cfg.get("pair_sell_lots", [0.01]), list) else set_cfg.get("pair_sell_lots", 0.01)))]
+                        if len(arr) < pair_len:
+                            arr += [arr[-1]] * (pair_len - len(arr))
+                        set_cfg["pair_sell_lots"] = arr[:pair_len]
+                        
+                        # Normalize single_lots
+                        if "single_lots" in set_cfg and isinstance(set_cfg["single_lots"], list):
+                            arr = [max(0.01, float(x)) for x in set_cfg["single_lots"]]
+                        else:
+                            arr = [max(0.01, float(set_cfg.get("single_lots", [0.01])[0] if isinstance(set_cfg.get("single_lots", [0.01]), list) else set_cfg.get("single_lots", 0.01)))]
+                        if len(arr) < groups:
+                            arr += [arr[-1]] * (groups - len(arr))
+                        set_cfg["single_lots"] = arr[:groups]
+                    
+                    self.config["symbols"][symbol]["sets_config"] = sets_config
+                    
+                    # Keep legacy fields in sync with first set for backward compatibility
+                    if sets_config:
+                        first_set = sets_config[0]
+                        self.config["symbols"][symbol]["pair_buy_lots"] = first_set["pair_buy_lots"][:]
+                        self.config["symbols"][symbol]["pair_sell_lots"] = first_set["pair_sell_lots"][:]
+                        self.config["symbols"][symbol]["single_lots"] = first_set["single_lots"][:]
+                        self.config["symbols"][symbol]["max_positions"] = first_set["max_positions"]
         
         self.save_config()
         return self.config
@@ -250,6 +296,18 @@ class ConfigManager:
     def get_symbol_config(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get config for a specific symbol"""
         return self.config.get("symbols", {}).get(symbol)
+    
+    def get_set_config(self, symbol: str, set_index: int = 0) -> Optional[Dict[str, Any]]:
+        """Get config for a specific set within a symbol"""
+        sym_cfg = self.get_symbol_config(symbol)
+        if not sym_cfg:
+            return None
+        sets_config = sym_cfg.get("sets_config", [])
+        if not sets_config:
+            return None
+        # Clamp set_index to valid range
+        set_index = max(0, min(set_index, len(sets_config) - 1))
+        return sets_config[set_index]
     
     def get_enabled_symbols(self) -> List[str]:
         """Get list of symbols that are enabled"""

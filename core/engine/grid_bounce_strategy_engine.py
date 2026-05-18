@@ -58,6 +58,7 @@ class StrategyState:
     # Position management
     position_counter: int = 0  # Counts toward max_positions (excludes initial 2)
     total_positions: int = 0   # Total open positions (for tracking)
+    current_set_index: int = 0  # Current active set (0-based index into sets_config)
     
     # Movement tracking
     last_move_direction: str = ""  # "UP" or "DOWN"
@@ -112,8 +113,29 @@ class GridBounceStrategyEngine:
         return float(self.config.get('grid_distance', 50.0))
     
     @property
+    def num_sets(self) -> int:
+        """Get total number of sets configured"""
+        return int(self.config.get('sets', 1))
+    
+    @property
+    def current_set_config(self) -> Dict[str, Any]:
+        """Get configuration for current active set"""
+        set_idx = max(0, min(self.state.current_set_index, self.num_sets - 1))
+        sets_config = self.config.get('sets_config', [])
+        if not sets_config:
+            # Fallback to single-set config (backward compat)
+            return {
+                'pair_buy_lots': self.config.get('pair_buy_lots', [0.01, 0.01]),
+                'pair_sell_lots': self.config.get('pair_sell_lots', [0.01, 0.01]),
+                'single_lots': self.config.get('single_lots', [0.01]),
+                'max_positions': self.config.get('max_positions', 3),
+            }
+        return sets_config[set_idx] if set_idx < len(sets_config) else sets_config[-1]
+    
+    @property
     def max_positions(self) -> int:
-        return int(self.config.get('max_positions', 3))
+        """Max positions for current set"""
+        return int(self.current_set_config.get('max_positions', 3))
 
     @property
     def group_count(self) -> int:
@@ -121,11 +143,11 @@ class GridBounceStrategyEngine:
 
     @property
     def pair_buy_lots(self) -> List[float]:
-        lots = self.config.get('pair_buy_lots')
+        lots = self.current_set_config.get('pair_buy_lots')
         if isinstance(lots, list) and lots:
             parsed = [max(0.01, float(x)) for x in lots]
         else:
-            parsed = [max(0.01, float(self.config.get('pair_buy_lot', 0.01)))]
+            parsed = [max(0.01, float(self.current_set_config.get('pair_buy_lot', 0.01)))]
         need = self.group_count + 1  # center + each 3-position group
         if len(parsed) < need:
             parsed += [parsed[-1]] * (need - len(parsed))
@@ -133,11 +155,11 @@ class GridBounceStrategyEngine:
 
     @property
     def pair_sell_lots(self) -> List[float]:
-        lots = self.config.get('pair_sell_lots')
+        lots = self.current_set_config.get('pair_sell_lots')
         if isinstance(lots, list) and lots:
             parsed = [max(0.01, float(x)) for x in lots]
         else:
-            parsed = [max(0.01, float(self.config.get('pair_sell_lot', 0.01)))]
+            parsed = [max(0.01, float(self.current_set_config.get('pair_sell_lot', 0.01)))]
         need = self.group_count + 1
         if len(parsed) < need:
             parsed += [parsed[-1]] * (need - len(parsed))
@@ -145,11 +167,11 @@ class GridBounceStrategyEngine:
 
     @property
     def single_lots(self) -> List[float]:
-        lots = self.config.get('single_lots')
+        lots = self.current_set_config.get('single_lots')
         if isinstance(lots, list) and lots:
             parsed = [max(0.01, float(x)) for x in lots]
         else:
-            parsed = [max(0.01, float(self.config.get('single_lot', 0.01)))]
+            parsed = [max(0.01, float(self.current_set_config.get('single_lot', 0.01)))]
         need = self.group_count
         if len(parsed) < need:
             parsed += [parsed[-1]] * (need - len(parsed))
@@ -217,6 +239,33 @@ class GridBounceStrategyEngine:
             return (tick.ask + tick.bid) / 2
         return self.state.center_price
 
+    def advance_to_next_set(self):
+        """
+        Advance to the next set when current set reaches max_positions.
+        Rotates sequentially through all available sets.
+        """
+        next_idx = (self.state.current_set_index + 1) % self.num_sets
+        if next_idx != self.state.current_set_index:
+            self.activity_log.log_info(
+                f"Max positions for Set {self.state.current_set_index + 1} reached. "
+                f"Advancing to Set {next_idx + 1}/{self.num_sets}"
+            )
+            self.state.current_set_index = next_idx
+            self.state.position_counter = 0  # Reset counter for new set
+            self.activity_log.log_info(
+                f"Now active: {self.get_set_display()} | "
+                f"max_positions={self.max_positions}, "
+                f"pair_buy={self.pair_buy_lots}, pair_sell={self.pair_sell_lots}, single={self.single_lots}"
+            )
+            return True
+        return False
+    
+    def get_set_display(self) -> str:
+        """Get a display string showing current set info"""
+        if self.num_sets > 1:
+            return f"Set {self.state.current_set_index + 1}/{self.num_sets}"
+        return ""
+
     async def start_ticker(self):
         """Compatibility hook for orchestrator config refreshes."""
         return None
@@ -247,6 +296,12 @@ class GridBounceStrategyEngine:
         self.state.grid_level_1 = GridLevel(price=center, active=True)
         
         self.activity_log.log_start(self.state.cycle_count, center)
+        if self.num_sets > 1:
+            self.activity_log.log_info(
+                f"Starting strategy on {self.get_set_display()} | "
+                f"max_positions={self.max_positions}, "
+                f"pair_buy={self.pair_buy_lots}, pair_sell={self.pair_sell_lots}, single={self.single_lots}"
+            )
         
         # Open initial pair at center
         center_buy_lot = self._pair_buy_lot_for_stage(0)
@@ -427,9 +482,12 @@ class GridBounceStrategyEngine:
         
         # Step 3: Check max_positions before opening
         if self.state.position_counter >= self.max_positions:
-            self.activity_log.log_info(f"Max positions ({self.max_positions}) reached - skipping new opens")
-            await self.save_state()
-            return
+            # Try to advance to next set
+            if not self.advance_to_next_set():
+                self.activity_log.log_info(f"Max positions ({self.max_positions}) reached for all sets - skipping new opens")
+                await self.save_state()
+                return
+            # Successfully advanced to next set, continue with opening
         
         # Open 3 positions at new level
         await self._open_triple_positions(
@@ -504,9 +562,12 @@ class GridBounceStrategyEngine:
         
         # Step 3: Check max_positions
         if self.state.position_counter >= self.max_positions:
-            self.activity_log.log_info(f"Max positions ({self.max_positions}) reached - skipping new opens")
-            await self.save_state()
-            return
+            # Try to advance to next set
+            if not self.advance_to_next_set():
+                self.activity_log.log_info(f"Max positions ({self.max_positions}) reached for all sets - skipping new opens")
+                await self.save_state()
+                return
+            # Successfully advanced to next set, continue with opening
         
         # Open 3 positions at new level
         await self._open_triple_positions(
@@ -569,10 +630,16 @@ class GridBounceStrategyEngine:
         
         # Step 2: Check max_positions
         if self.state.position_counter >= self.max_positions:
-            self.activity_log.log_info(f"Max positions ({self.max_positions}) reached - skipping new opens")
-            self.state.last_move_direction = "DOWN_TO_LOWER"
-            await self.save_state()
-            return
+            # Try to advance to next set
+            if not self.advance_to_next_set():
+                self.activity_log.log_info(f"Max positions ({self.max_positions}) reached for all sets - skipping new opens")
+                self.state.last_move_direction = "DOWN_TO_LOWER"
+                await self.save_state()
+                return
+            # Successfully advanced to next set, continue with opening
+            self.activity_log.log_info(f"Advancing to next set - opening positions for {self.get_set_display()}")
+        
+        self.state.last_move_direction = "DOWN_TO_LOWER"
         
         # Step 3: Open 3 positions at lower
         await self._open_triple_positions(lower_level, ask, bid, direction="DOWN")
@@ -603,10 +670,16 @@ class GridBounceStrategyEngine:
         
         # Step 2: Check max_positions
         if self.state.position_counter >= self.max_positions:
-            self.activity_log.log_info(f"Max positions ({self.max_positions}) reached - skipping new opens")
-            self.state.last_move_direction = "UP_TO_UPPER"
-            await self.save_state()
-            return
+            # Try to advance to next set
+            if not self.advance_to_next_set():
+                self.activity_log.log_info(f"Max positions ({self.max_positions}) reached for all sets - skipping new opens")
+                self.state.last_move_direction = "UP_TO_UPPER"
+                await self.save_state()
+                return
+            # Successfully advanced to next set, continue with opening
+            self.activity_log.log_info(f"Advancing to next set - opening positions for {self.get_set_display()}")
+        
+        self.state.last_move_direction = "UP_TO_UPPER"
         
         # Step 3: Open 3 positions at upper
         await self._open_triple_positions(upper_level, ask, bid, direction="UP")
@@ -641,6 +714,13 @@ class GridBounceStrategyEngine:
         pair_buy_lot = self._pair_buy_lot_for_stage(pair_stage)
         pair_sell_lot = self._pair_sell_lot_for_stage(pair_stage)
         single_lot = self._single_lot_for_group(single_group)
+
+        if self.num_sets > 1:
+            self.activity_log.log_info(
+                f"Opening triple on {self.get_set_display()} | "
+                f"counter={self.state.position_counter}/{self.max_positions} | "
+                f"direction={direction} | pair_stage={pair_stage}, single_group={single_group}"
+            )
 
         # Open Pair Buy
         # When direction="DOWN", this will be the unpaired buy (gets custom buy TP/SL)

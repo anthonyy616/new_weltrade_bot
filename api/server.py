@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Any, Optional
 from core.bot_manager import BotManager
 from core.trading_engine import TradingEngine 
@@ -83,6 +83,9 @@ class SymbolConfig(BaseModel):
     pair_sell_lots: Optional[List[float]] = None
     single_lots: Optional[List[float]] = None
     max_positions: Optional[int] = None
+    # Multi-set support
+    sets: Optional[int] = None
+    sets_config: Optional[List[Dict[str, Any]]] = None
 
 class GlobalConfig(BaseModel):
     """Global settings"""
@@ -90,6 +93,9 @@ class GlobalConfig(BaseModel):
 
 class ConfigUpdate(BaseModel):
     """Multi-asset config update payload"""
+    model_config = ConfigDict(populate_by_name=True)
+    # New preferred key used by frontend
+    global_: Optional[GlobalConfig] = Field(default=None, alias="global")
     global_settings: Optional[GlobalConfig] = None
     symbols: Optional[Dict[str, SymbolConfig]] = None
 
@@ -166,9 +172,10 @@ async def update_config(config: ConfigUpdate, bot = Depends(get_current_bot)):
     update_data = {}
     
     # Handle global settings
-    if config.global_settings:
+    global_cfg = config.global_ or config.global_settings
+    if global_cfg:
         update_data["global"] = {
-            k: v for k, v in config.global_settings.model_dump().items() 
+            k: v for k, v in global_cfg.model_dump().items() 
             if v is not None
         }
     
