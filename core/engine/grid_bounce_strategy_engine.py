@@ -242,10 +242,18 @@ class GridBounceStrategyEngine:
     def advance_to_next_set(self):
         """
         Advance to the next set when current set reaches max_positions.
-        Rotates sequentially through all available sets.
+        Advances sequentially without wrap-around.
+        If already on the last set, no further advancement occurs.
         """
-        next_idx = (self.state.current_set_index + 1) % self.num_sets
-        if next_idx != self.state.current_set_index:
+        if self.state.current_set_index >= (self.num_sets - 1):
+            self.activity_log.log_info(
+                f"Final set reached ({self.get_set_display()}); max positions hit. "
+                "No further set rotation."
+            )
+            return False
+
+        next_idx = self.state.current_set_index + 1
+        if next_idx < self.num_sets:
             self.activity_log.log_info(
                 f"Max positions for Set {self.state.current_set_index + 1} reached. "
                 f"Advancing to Set {next_idx + 1}/{self.num_sets}"
@@ -1004,11 +1012,11 @@ class GridBounceStrategyEngine:
         if aligned_tp == calculated_tp and aligned_sl == calculated_sl:
             return aligned_tp, aligned_sl, False
 
-        self.activity_log.log_info(
-            f"{direction.upper()} position #{ticket} at {grid_level.price:.5f} aligning to "
-            f"{pos_type} reference: TP={aligned_tp:.5f}, SL={aligned_sl:.5f} "
-            f"(original: TP={calculated_tp:.5f}, SL={calculated_sl:.5f})"
-        )
+        #self.activity_log.log_info(
+            #f"{direction.upper()} position #{ticket} at {grid_level.price:.5f} aligning to "
+            #f"{pos_type} reference: TP={aligned_tp:.5f}, SL={aligned_sl:.5f} "
+            #f"(original: TP={calculated_tp:.5f}, SL={calculated_sl:.5f})"
+        #)
 
         if has_virtual_stops:
             self.activity_log.log_info(
