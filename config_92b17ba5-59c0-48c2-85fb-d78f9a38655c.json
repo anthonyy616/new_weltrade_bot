@@ -1,6 +1,6 @@
 {
     "global": {
-        "max_runtime_minutes": 180
+        "max_runtime_minutes": 200000
     },
     "symbols": {
         "FX Vol 20": {
@@ -11,23 +11,41 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.02,
-            "max_positions": 9,
+            "max_positions": 27,
             "pair_buy_lots": [
-                0.01,
-                0.02,
-                0.03,
-                0.04
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                1.0
             ],
             "pair_sell_lots": [
-                0.01,
-                0.02,
-                0.03,
-                0.04
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                1.0
             ],
             "single_lots": [
                 0.25,
                 0.35,
-                0.45
+                0.45,
+                0.55,
+                0.65,
+                0.75,
+                0.85,
+                0.95,
+                1.5
             ],
             "second_entry_buy_tp_pips": 30.0,
             "second_entry_buy_sl_pips": 30.0,
