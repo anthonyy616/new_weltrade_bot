@@ -1081,7 +1081,7 @@
             document.getElementById('copy-step-2')?.classList.remove('hidden');
         }
 
-        function confirmCopyChoice() {
+        async function confirmCopyChoice() {
             const pending = window.__pendingCopyLots;
             if (!pending) {
                 cancelCopyChoice();
@@ -1092,6 +1092,8 @@
             window.__pendingCopyLots = null;
             document.getElementById('copy-diff-prompt')?.classList.add('hidden');
             applyLotCopy(pending.sourceSymbol, pending.targetSymbols, mode);
+            const payload = buildCopiedConfigPayload(pending.sourceSymbol, pending.targetSymbols, mode);
+            await saveConfigPayload(payload);
         }
 
         function cloneSetData(setData) {
@@ -1180,18 +1182,67 @@
                 }
             });
 
-            scheduleAutoSave();
             document.getElementById('copy-step-1')?.classList.add('hidden');
             document.getElementById('copy-step-2')?.classList.add('hidden');
             document.getElementById('copy-diff-prompt')?.classList.add('hidden');
             document.getElementById('copy-success')?.classList.remove('hidden');
         }
 
-        async function persistConfigNow() {
+        function buildCopiedConfigPayload(sourceSymbol, targetSymbols, mode) {
             const payload = buildConfigPayload();
+            const sourceConfig = payload.symbols?.[sourceSymbol];
+            if (!sourceConfig) return payload;
+
+            const sourceSetCount = Math.max(1, parseInt(sourceConfig.sets || sourceConfig.sets_config?.length || 1));
+            const sourceSets = Array.isArray(sourceConfig.sets_config) ? sourceConfig.sets_config.map(cloneSetData) : [];
+
+            for (const targetSymbol of (targetSymbols || [])) {
+                const targetConfig = payload.symbols?.[targetSymbol];
+                if (!targetConfig) continue;
+
+                const targetSetCount = Math.max(1, parseInt(targetConfig.sets || targetConfig.sets_config?.length || 1));
+                if (mode === 'skip' && targetSetCount !== sourceSetCount) continue;
+
+                if (mode === 'match' && targetSetCount !== sourceSetCount) {
+                    const mergedSets = Array.isArray(targetConfig.sets_config) ? targetConfig.sets_config.map(cloneSetData) : [];
+                    const copyCount = Math.min(sourceSetCount, targetSetCount);
+                    for (let setIdx = 0; setIdx < copyCount; setIdx++) {
+                        mergedSets[setIdx] = cloneSetData(sourceSets[setIdx]);
+                    }
+                    payload.symbols[targetSymbol] = {
+                        ...targetConfig,
+                        grid_distance: sourceConfig.grid_distance,
+                        tp_pips: sourceConfig.tp_pips,
+                        sl_pips: sourceConfig.sl_pips,
+                        second_entry_buy_tp_pips: sourceConfig.second_entry_buy_tp_pips,
+                        second_entry_buy_sl_pips: sourceConfig.second_entry_buy_sl_pips,
+                        second_entry_sell_tp_pips: sourceConfig.second_entry_sell_tp_pips,
+                        second_entry_sell_sl_pips: sourceConfig.second_entry_sell_sl_pips,
+                        sets: targetSetCount,
+                        sets_config: mergedSets,
+                        enabled: targetConfig.enabled !== false,
+                    };
+                    continue;
+                }
+
+                payload.symbols[targetSymbol] = {
+                    ...targetConfig,
+                    ...sourceConfig,
+                    enabled: targetConfig.enabled !== false,
+                };
+            }
+
+            return payload;
+        }
+
+        async function saveConfigPayload(payload) {
             const anyEnabled = Object.values(payload.symbols || {}).some(s => s.enabled);
             if (!anyEnabled) return null;
             return await apiCall('/config', 'POST', payload);
+        }
+
+        async function persistConfigNow() {
+            return await saveConfigPayload(buildConfigPayload());
         }
 
         async function executeLotCopy() {
@@ -1222,7 +1273,8 @@
             }
 
             applyLotCopy(sourceSymbol, targetSymbols, 'overwrite');
-            await persistConfigNow();
+            const payload = buildCopiedConfigPayload(sourceSymbol, targetSymbols, 'overwrite');
+            await saveConfigPayload(payload);
         }
 
         function initAutoSave() {

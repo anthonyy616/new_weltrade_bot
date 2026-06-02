@@ -94,7 +94,7 @@
             ]
         },
         "FX Vol 60": {
-            "enabled": false,
+            "enabled": true,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
