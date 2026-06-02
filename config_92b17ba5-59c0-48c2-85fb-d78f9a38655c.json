@@ -454,23 +454,32 @@
             ]
         },
         "SFX Vol 20": {
-            "enabled": false,
+            "enabled": true,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 3,
+            "max_positions": 12,
             "pair_buy_lots": [
+                0.1,
+                0.2,
+                0.3,
                 0.01,
                 0.01
             ],
             "pair_sell_lots": [
+                0.1,
+                0.2,
+                0.01,
                 0.01,
                 0.01
             ],
             "single_lots": [
+                0.2,
+                0.01,
+                0.01,
                 0.01
             ],
             "second_entry_buy_tp_pips": 150.0,
@@ -481,17 +490,26 @@
             "sets_config": [
                 {
                     "pair_buy_lots": [
+                        0.1,
+                        0.2,
+                        0.3,
                         0.01,
                         0.01
                     ],
                     "pair_sell_lots": [
+                        0.1,
+                        0.2,
+                        0.01,
                         0.01,
                         0.01
                     ],
                     "single_lots": [
+                        0.2,
+                        0.01,
+                        0.01,
                         0.01
                     ],
-                    "max_positions": 3
+                    "max_positions": 12
                 }
             ]
         },

@@ -63,6 +63,64 @@
             </form>
             <p id="login-error" class="text-red-500 text-sm text-center mt-4 hidden"></p>
         </div>
+
+    </div>
+
+    <!-- Copy Lots Modal (hidden by default) -->
+    <div id="copy-lots-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-800 rounded-lg border border-slate-700 w-full max-w-sm shadow-2xl">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                <h3 class="text-sm font-bold text-white">Copy Lot Setup</h3>
+                <button type="button" onclick="closeCopyLotsModal()" class="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
+            </div>
+
+            <!-- Step 1: Source -->
+            <div id="copy-step-1" class="p-4 space-y-3">
+                <p class="text-xs text-slate-400">Step 1 — Select the asset to copy <strong>from</strong>:</p>
+                <div id="copy-source-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
+                <button type="button" onclick="goToCopyStep2()" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium">Next →</button>
+            </div>
+
+            <!-- Step 2: Targets -->
+            <div id="copy-step-2" class="p-4 space-y-3 hidden">
+                <p class="text-xs text-slate-400">Step 2 — Select assets to copy <strong>to</strong>:</p>
+                <div id="copy-target-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="goBackToCopyStep1()" class="flex-1 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-medium">← Back</button>
+                    <button type="button" onclick="executeLotCopy()" class="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium">Copy</button>
+                </div>
+            </div>
+
+            <!-- Success state -->
+            <div id="copy-success" class="p-4 text-center hidden">
+                <div class="text-green-400 text-2xl mb-2">✓</div>
+                <p class="text-xs text-slate-300">Lot setup copied and saved to the backend.</p>
+                <button type="button" onclick="closeCopyLotsModal()" class="mt-3 w-full py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs">Done</button>
+            </div>
+            <!-- Differing-sets prompt -->
+            <div id="copy-diff-prompt" class="p-4 space-y-3 hidden">
+                <p id="copy-diff-msg" class="text-xs text-slate-300">The source has a different number of sets than some targets.</p>
+                <div class="text-xs text-slate-400">Choose how to handle targets with differing sets:</div>
+                <div class="space-y-2">
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="copy-diff-choice" value="overwrite" checked>
+                        <span>Overwrite target sets to match the source (recommended)</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="copy-diff-choice" value="match">
+                        <span>Copy only matching set indices (don't change number of sets)</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="copy-diff-choice" value="skip">
+                        <span>Skip targets with differing sets</span>
+                    </label>
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="confirmCopyChoice()" class="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium">Confirm</button>
+                    <button type="button" onclick="cancelCopyChoice()" class="flex-1 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-medium">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="dashboard" class="max-w-6xl mx-auto space-y-4 md:space-y-6 hidden">
@@ -228,6 +286,15 @@
                             </div>
                         </div>
 
+                        <!-- Copy Lots button -->
+                        <div class="mt-2">
+                            <button type="button" id="copy-lot-btn" onclick="openCopyLotsModal()"
+                                class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium flex items-center justify-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6M9 16h6M9 8h6M3 6h.01M3 12h.01M3 18h.01M21 6h.01M21 12h.01M21 18h.01"/></svg>
+                                Copy Lot Setup
+                            </button>
+                        </div>
+
                         <!-- Per-Asset Settings will appear here when checked -->
                         <div id="asset-settings-container" class="space-y-2 mt-3">
                             <!-- Dynamic per-asset settings rendered here -->
@@ -247,8 +314,22 @@
                             <div>
                                 <label class="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Max Time
                                     (Min)</label>
-                                <input type="number" id="max_runtime_minutes" value="0"
+                                <input type="number" id="max_runtime_minutes" value="0" oninput="scheduleAutoSave()"
                                     class="w-full p-1.5 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            </div>
+
+                            <!-- Auto-save toggle -->
+                            <div class="col-span-2 flex items-center justify-between mt-1 p-1.5 bg-slate-800 rounded border border-slate-600">
+                                <label class="text-[10px] text-slate-400 leading-tight">
+                                    Auto-save config<br>
+                                    <span class="text-[9px] text-slate-500">Saves on field change</span>
+                                </label>
+                                <button type="button" id="autosave-toggle" onclick="toggleAutoSave()" class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors bg-slate-600" role="switch" aria-checked="false">
+                                    <span id="autosave-knob" class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform translate-x-1"></span>
+                                </button>
+                            </div>
+                            <div class="col-span-2 text-right">
+                                <div id="autosave-status" class="text-[9px] text-slate-500 hidden">Saved ✓</div>
                             </div>
                         </div>
                     </div>
@@ -353,6 +434,9 @@
         // Session timer state
         let sessionStartTs = null;
         let sessionTimerInterval = null;
+        let autoSaveEnabled = true;
+        let autoSaveTimer = null;
+        const AUTO_SAVE_DEBOUNCE_MS = 1200;
 
         const ICONS = {
             play: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 inline-block mr-1"><path d="M6.5 5.5v9l7-4.5-7-4.5z" /></svg>`,
@@ -612,7 +696,7 @@
             }).join('');
 
             return `
-            <details class="bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-200 dark:border-slate-700 overflow-hidden" open>
+            <details ontoggle="if(this.open) setLastInteracted('${symbol}', '${safeId}')" class="bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-200 dark:border-slate-700 overflow-hidden" open>
                 <summary class="px-2 sm:px-3 py-1.5 sm:py-2 cursor-pointer flex flex-col sm:flex-row sm:items-center sm:justify-between hover:bg-slate-100 dark:hover:bg-slate-700/50 gap-2 transition-colors">
                     <span class="text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400">${ICONS.chart} ${symbol}</span>
                     <div class="flex items-center gap-1 sm:gap-2">
@@ -627,17 +711,17 @@
                     <div class="grid grid-cols-3 gap-1 sm:gap-2">
                         <div>
                             <label class="block text-[8px] sm:text-[10px] text-gray-500 dark:text-gray-400">Grid Dist</label>
-                            <input type="number" id="griddist_${safeId}" step="1" value="${gridDist}"
+                            <input type="number" id="griddist_${safeId}" step="1" value="${gridDist}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-[8px] sm:text-[10px] text-green-600 dark:text-green-400">TP (pips)</label>
-                            <input type="number" id="tppips_${safeId}" step="1" value="${tpPips}"
+                            <input type="number" id="tppips_${safeId}" step="1" value="${tpPips}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-white dark:bg-slate-900 border border-green-300 dark:border-green-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-green-500">
                         </div>
                         <div>
                             <label class="block text-[8px] sm:text-[10px] text-red-600 dark:text-red-400">SL (pips)</label>
-                            <input type="number" id="slpips_${safeId}" step="1" value="${slPips}"
+                            <input type="number" id="slpips_${safeId}" step="1" value="${slPips}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-white dark:bg-slate-900 border border-red-300 dark:border-red-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-red-500">
                         </div>
                     </div>
@@ -645,7 +729,7 @@
                     <!-- Sets Configuration -->
                     <div>
                         <label class="block text-[8px] sm:text-[10px] text-purple-600 dark:text-purple-400 mb-1">Sets (Number of position sets)</label>
-                        <select id="sets_${safeId}" onchange="updateLotInputs('${symbol}','${safeId}')"
+                        <select id="sets_${safeId}" onchange="updateLotInputs('${symbol}','${safeId}'); scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                             class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-purple-500">
                             ${setOptions}
                         </select>
@@ -662,19 +746,19 @@
                         <div class="p-2 bg-slate-100 dark:bg-slate-900 rounded border border-slate-300 dark:border-slate-700">
                             <div class="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">2nd Entry — Buy</div>
                             <label class="block text-[8px] text-green-600 dark:text-green-400">TP (pips)</label>
-                            <input type="number" id="second_entry_buy_tp_${safeId}" step="1" value="${secondBuyTp}"
+                            <input type="number" id="second_entry_buy_tp_${safeId}" step="1" value="${secondBuyTp}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-full p-1 text-xs rounded bg-white dark:bg-slate-950 border border-green-300 dark:border-green-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-green-500">
                             <label class="block text-[8px] text-red-600 dark:text-red-400 mt-1">SL (pips)</label>
-                            <input type="number" id="second_entry_buy_sl_${safeId}" step="1" value="${secondBuySl}"
+                            <input type="number" id="second_entry_buy_sl_${safeId}" step="1" value="${secondBuySl}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-full p-1 text-xs rounded bg-white dark:bg-slate-950 border border-red-300 dark:border-red-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-red-500">
                         </div>
                         <div class="p-2 bg-slate-100 dark:bg-slate-900 rounded border border-slate-300 dark:border-slate-700">
                             <div class="text-xs font-semibold text-pink-700 dark:text-pink-300 mb-1">2nd Entry — Sell</div>
                             <label class="block text-[8px] text-green-600 dark:text-green-400">TP (pips)</label>
-                            <input type="number" id="second_entry_sell_tp_${safeId}" step="1" value="${secondSellTp}"
+                            <input type="number" id="second_entry_sell_tp_${safeId}" step="1" value="${secondSellTp}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-full p-1 text-xs rounded bg-white dark:bg-slate-950 border border-green-300 dark:border-green-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-green-500">
                             <label class="block text-[8px] text-red-600 dark:text-red-400 mt-1">SL (pips)</label>
-                            <input type="number" id="second_entry_sell_sl_${safeId}" step="1" value="${secondSellSl}"
+                            <input type="number" id="second_entry_sell_sl_${safeId}" step="1" value="${secondSellSl}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-full p-1 text-xs rounded bg-white dark:bg-slate-950 border border-red-300 dark:border-red-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-red-500">
                         </div>
                     </div>
@@ -728,7 +812,7 @@
                     <!-- Max Positions for this set -->
                     <div class="mb-2">
                         <label class="block text-[8px] sm:text-[10px] text-orange-600 dark:text-orange-400 mb-1">Max Pos Input (1-20, ×3)</label>
-                        <select id="maxpos_${safeId}${fieldSuffix}" onchange="updateLotInputs('${symbol}','${safeId}')"
+                        <select id="maxpos_${safeId}${fieldSuffix}" onchange="updateLotInputs('${symbol}','${safeId}'); scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                             class="w-full p-1 sm:p-1.5 text-xs sm:text-sm rounded bg-white dark:bg-slate-900 border border-orange-300 dark:border-orange-700/50 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-orange-500">
                             ${maxPosOptions}
                         </select>
@@ -805,12 +889,12 @@
                     <div class="flex flex-wrap items-center gap-2 mb-2">
                         <div class="flex flex-col items-center bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-200 dark:border-blue-800/50">
                             <label class="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">1st Buy</label>
-                            <input type="number" id="pairbuy_${safeId}${fieldSuffix}_1" step="0.01" value="${centerBuy}"
+                            <input type="number" id="pairbuy_${safeId}${fieldSuffix}_1" step="0.01" value="${centerBuy}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                         </div>
                         <div class="flex flex-col items-center bg-red-50 dark:bg-red-900/20 p-1.5 rounded border border-red-200 dark:border-red-800/50">
                             <label class="text-[9px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">1st Sell</label>
-                            <input type="number" id="pairsell_${safeId}${fieldSuffix}_1" step="0.01" value="${centerSell}"
+                            <input type="number" id="pairsell_${safeId}${fieldSuffix}_1" step="0.01" value="${centerSell}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none">
                         </div>
                     </div>
@@ -835,17 +919,17 @@
                     <div class="flex flex-wrap items-center gap-2 mb-2">
                         <div class="flex flex-col items-center bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-200 dark:border-blue-800/50">
                             <label class="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">${ordinal(inputIdx)} Buy</label>
-                            <input type="number" id="pairbuy_${safeId}${fieldSuffix}_${inputIdx}" step="0.01" value="${pbVal}"
+                            <input type="number" id="pairbuy_${safeId}${fieldSuffix}_${inputIdx}" step="0.01" value="${pbVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                         </div>
                         <div class="flex flex-col items-center bg-red-50 dark:bg-red-900/20 p-1.5 rounded border border-red-200 dark:border-red-800/50">
                             <label class="text-[9px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">${ordinal(inputIdx)} Sell</label>
-                            <input type="number" id="pairsell_${safeId}${fieldSuffix}_${inputIdx}" step="0.01" value="${psVal}"
+                            <input type="number" id="pairsell_${safeId}${fieldSuffix}_${inputIdx}" step="0.01" value="${psVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none">
                         </div>
                         <div class="flex flex-col items-center bg-purple-50 dark:bg-purple-900/20 p-1.5 rounded border border-purple-200 dark:border-purple-800/50">
                             <label class="text-[9px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-1">${singleLabel}</label>
-                            <input type="number" id="single_${safeId}${fieldSuffix}_${g + 1}" step="0.01" value="${sVal}"
+                            <input type="number" id="single_${safeId}${fieldSuffix}_${g + 1}" step="0.01" value="${sVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none">
                         </div>
                     </div>
@@ -858,43 +942,26 @@
         // Attach change listener to checkboxes
         document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.symbol-check').forEach(cb => {
-                cb.addEventListener('change', () => renderAssetSettings());
+                cb.addEventListener('change', () => {
+                    renderAssetSettings();
+                    scheduleAutoSave(800);
+                });
             });
+            // Initialize autosave UI
+            initAutoSave();
         });
 
-        async function updateConfig(e) {
-            e.preventDefault();
-
-            // Get checked symbols
-            const checkedSymbols = Array.from(document.querySelectorAll('.symbol-check:checked')).map(cb => cb.value);
-
-            if (checkedSymbols.length === 0) {
-                alert("Please select at least one asset!");
-                return;
-            }
-
-            // Build payload with new multi-asset structure
-            const payload = {
-                global: {
-                    max_runtime_minutes: parseInt(document.getElementById('max_runtime_minutes').value) || 0,
-                },
-                symbols: {}
-            };
-
-            // Get all symbols (both checked and unchecked to update enable state)
+        // Build payload from DOM values (used by manual save and auto-save)
+        function buildConfigPayload() {
+            const payload = { global: { max_runtime_minutes: parseInt(document.getElementById('max_runtime_minutes').value) || 0 }, symbols: {} };
             document.querySelectorAll('.symbol-check').forEach(cb => {
                 const symbol = cb.value;
                 const safeId = symbol.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
                 const isEnabled = cb.checked;
-
                 payload.symbols[symbol] = { enabled: isEnabled };
-
-                // If enabled, get its settings (Grid Bounce Strategy with Sets support)
                 if (isEnabled) {
                     const numSets = parseInt(document.getElementById(`sets_${safeId}`)?.value) || 1;
                     const setsConfig = [];
-                    
-                    // Collect configuration for each set
                     for (let setIdx = 0; setIdx < numSets; setIdx++) {
                         const fieldSuffix = `_set_${setIdx}`;
                         const maxPosInputRaw = parseInt(document.getElementById(`maxpos_${safeId}${fieldSuffix}`)?.value) || 1;
@@ -904,31 +971,20 @@
                         const pairBuyArr = [];
                         const pairSellArr = [];
                         const singleArr = [];
-                        
-                        // Pair arrays include center pair + each adaptive group pair
                         for (let p = 1; p <= groups + 1; p++) {
                             pairBuyArr.push(parseFloat(document.getElementById(`pairbuy_${safeId}${fieldSuffix}_${p}`)?.value) || 0.01);
                             pairSellArr.push(parseFloat(document.getElementById(`pairsell_${safeId}${fieldSuffix}_${p}`)?.value) || 0.01);
                         }
-                        // Single arrays include one value per adaptive group
                         for (let g = 0; g < groups; g++) {
                             singleArr.push(parseFloat(document.getElementById(`single_${safeId}${fieldSuffix}_${g + 1}`)?.value) || 0.01);
                         }
-                        
-                        setsConfig.push({
-                            pair_buy_lots: pairBuyArr,
-                            pair_sell_lots: pairSellArr,
-                            single_lots: singleArr,
-                            max_positions: maxPosVal
-                        });
+                        setsConfig.push({ pair_buy_lots: pairBuyArr, pair_sell_lots: pairSellArr, single_lots: singleArr, max_positions: maxPosVal });
                     }
-
                     payload.symbols[symbol] = {
                         enabled: true,
                         grid_distance: parseFloat(document.getElementById(`griddist_${safeId}`)?.value) || 50,
                         tp_pips: parseFloat(document.getElementById(`tppips_${safeId}`)?.value) || 150,
                         sl_pips: parseFloat(document.getElementById(`slpips_${safeId}`)?.value) || 200,
-                        // 2nd entry directional TP/SL (global, not per-set)
                         second_entry_buy_tp_pips: parseFloat(document.getElementById(`second_entry_buy_tp_${safeId}`)?.value) || 150,
                         second_entry_buy_sl_pips: parseFloat(document.getElementById(`second_entry_buy_sl_${safeId}`)?.value) || 200,
                         second_entry_sell_tp_pips: parseFloat(document.getElementById(`second_entry_sell_tp_${safeId}`)?.value) || 150,
@@ -938,16 +994,291 @@
                     };
                 }
             });
+            return payload;
+        }
 
-            console.log("Sending multi-asset config payload with sets:", payload);
+        function safeIdFromSymbol(symbol) {
+            return symbol.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+        }
 
+        function openCopyLotsModal() {
+            const modal = document.getElementById('copy-lots-modal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.dataset.copySource = '';
+            document.getElementById('copy-step-1')?.classList.remove('hidden');
+            document.getElementById('copy-step-2')?.classList.add('hidden');
+            document.getElementById('copy-diff-prompt')?.classList.add('hidden');
+            document.getElementById('copy-success')?.classList.add('hidden');
+            populateCopySourceList();
+        }
+
+        function closeCopyLotsModal() {
+            const modal = document.getElementById('copy-lots-modal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            window.__pendingCopyLots = null;
+        }
+
+        function populateCopySourceList() {
+            const list = document.getElementById('copy-source-list');
+            if (!list) return;
+            const symbols = Object.entries(currentConfig?.symbols || {})
+                .filter(([, cfg]) => cfg?.enabled)
+                .map(([symbol]) => symbol);
+            list.innerHTML = symbols.length
+                ? symbols.map(symbol => `
+                    <label class="flex items-center gap-2 p-1 rounded hover:bg-slate-700/30 cursor-pointer">
+                        <input type="radio" name="copy-source" value="${symbol}" class="h-4 w-4 accent-indigo-500">
+                        <span class="text-xs text-slate-200">${symbol}</span>
+                    </label>
+                `).join('')
+                : '<p class="text-xs text-slate-400">No enabled assets available.</p>';
+        }
+
+        function populateCopyTargetList(sourceSymbol) {
+            const list = document.getElementById('copy-target-list');
+            if (!list) return;
+            const symbols = Object.entries(currentConfig?.symbols || {})
+                .filter(([symbol, cfg]) => symbol !== sourceSymbol && cfg?.enabled)
+                .map(([symbol]) => symbol);
+            list.innerHTML = symbols.length
+                ? symbols.map(symbol => `
+                    <label class="flex items-center gap-2 p-1 rounded hover:bg-slate-700/30 cursor-pointer">
+                        <input type="checkbox" name="copy-target" value="${symbol}" class="h-4 w-4 accent-emerald-500">
+                        <span class="text-xs text-slate-200">${symbol}</span>
+                    </label>
+                `).join('')
+                : '<p class="text-xs text-slate-400">No other enabled assets available.</p>';
+        }
+
+        function goToCopyStep2() {
+            const selected = document.querySelector('input[name="copy-source"]:checked');
+            if (!selected) {
+                alert('Please select a source asset.');
+                return;
+            }
+            const sourceSymbol = selected.value;
+            const modal = document.getElementById('copy-lots-modal');
+            if (!modal) return;
+            modal.dataset.copySource = sourceSymbol;
+            populateCopyTargetList(sourceSymbol);
+            document.getElementById('copy-step-1')?.classList.add('hidden');
+            document.getElementById('copy-step-2')?.classList.remove('hidden');
+            document.getElementById('copy-diff-prompt')?.classList.add('hidden');
+            document.getElementById('copy-success')?.classList.add('hidden');
+        }
+
+        function goBackToCopyStep1() {
+            document.getElementById('copy-step-2')?.classList.add('hidden');
+            document.getElementById('copy-diff-prompt')?.classList.add('hidden');
+            document.getElementById('copy-step-1')?.classList.remove('hidden');
+        }
+
+        function cancelCopyChoice() {
+            window.__pendingCopyLots = null;
+            document.getElementById('copy-diff-prompt')?.classList.add('hidden');
+            document.getElementById('copy-step-2')?.classList.remove('hidden');
+        }
+
+        function confirmCopyChoice() {
+            const pending = window.__pendingCopyLots;
+            if (!pending) {
+                cancelCopyChoice();
+                return;
+            }
+            const selected = document.querySelector('input[name="copy-diff-choice"]:checked');
+            const mode = selected?.value || 'overwrite';
+            window.__pendingCopyLots = null;
+            document.getElementById('copy-diff-prompt')?.classList.add('hidden');
+            applyLotCopy(pending.sourceSymbol, pending.targetSymbols, mode);
+        }
+
+        function cloneSetData(setData) {
+            return {
+                pair_buy_lots: Array.isArray(setData?.pair_buy_lots) ? [...setData.pair_buy_lots] : [],
+                pair_sell_lots: Array.isArray(setData?.pair_sell_lots) ? [...setData.pair_sell_lots] : [],
+                single_lots: Array.isArray(setData?.single_lots) ? [...setData.single_lots] : [],
+                max_positions: setData?.max_positions
+            };
+        }
+
+        function getSymbolSetCount(symbol) {
+            const safeId = safeIdFromSymbol(symbol);
+            return lotInitialBySafeId[safeId]?.num_sets
+                || parseInt(document.getElementById(`sets_${safeId}`)?.value)
+                || 1;
+        }
+
+        function getSourceLotData(symbol) {
+            const safeId = safeIdFromSymbol(symbol);
+            const sourceData = lotInitialBySafeId[safeId]?.sets_data || [];
+            return sourceData.map(cloneSetData);
+        }
+
+        function fillSetInputs(targetSafeId, setIdx, setData) {
+            const suffix = `_set_${setIdx}`;
+            const fieldCount = Math.max(
+                Array.isArray(setData.pair_buy_lots) ? setData.pair_buy_lots.length : 0,
+                Array.isArray(setData.pair_sell_lots) ? setData.pair_sell_lots.length : 0,
+                Array.isArray(setData.single_lots) ? setData.single_lots.length : 0
+            );
+            for (let i = 1; i <= fieldCount; i++) {
+                const pairBuy = document.getElementById(`pairbuy_${targetSafeId}${suffix}_${i}`);
+                const pairSell = document.getElementById(`pairsell_${targetSafeId}${suffix}_${i}`);
+                if (pairBuy && setData.pair_buy_lots?.[i - 1] !== undefined) pairBuy.value = setData.pair_buy_lots[i - 1];
+                if (pairSell && setData.pair_sell_lots?.[i - 1] !== undefined) pairSell.value = setData.pair_sell_lots[i - 1];
+            }
+            for (let i = 1; i <= (setData.single_lots?.length || 0); i++) {
+                const single = document.getElementById(`single_${targetSafeId}${suffix}_${i}`);
+                if (single && setData.single_lots?.[i - 1] !== undefined) single.value = setData.single_lots[i - 1];
+            }
+        }
+
+        function applyLotCopy(sourceSymbol, targetSymbols, mode) {
+            const sourceSafeId = safeIdFromSymbol(sourceSymbol);
+            const sourceSets = getSourceLotData(sourceSymbol);
+            const sourceSetCount = sourceSets.length || getSymbolSetCount(sourceSymbol);
+            const targets = targetSymbols || [];
+
+            targets.forEach(targetSymbol => {
+                const targetSafeId = safeIdFromSymbol(targetSymbol);
+                const targetSetCount = getSymbolSetCount(targetSymbol);
+                const existingTargetSets = getSourceLotData(targetSymbol);
+
+                if (mode === 'skip' && targetSetCount !== sourceSetCount) return;
+
+                if (mode === 'overwrite' && targetSetCount !== sourceSetCount) {
+                    lotInitialBySafeId[targetSafeId] = lotInitialBySafeId[targetSafeId] || {};
+                    lotInitialBySafeId[targetSafeId].num_sets = sourceSetCount;
+                    lotInitialBySafeId[targetSafeId].sets_data = sourceSets.map(cloneSetData);
+                    const setsSelect = document.getElementById(`sets_${targetSafeId}`);
+                    if (setsSelect) setsSelect.value = String(sourceSetCount);
+                    updateLotInputs(targetSymbol, targetSafeId);
+                    setTimeout(() => {
+                        sourceSets.forEach((setData, setIdx) => fillSetInputs(targetSafeId, setIdx, setData));
+                    }, 0);
+                    return;
+                }
+
+                const limit = mode === 'match' ? Math.min(sourceSetCount, targetSetCount) : sourceSetCount;
+                for (let setIdx = 0; setIdx < limit; setIdx++) {
+                    fillSetInputs(targetSafeId, setIdx, sourceSets[setIdx]);
+                }
+                if (mode === 'match') {
+                    const mergedSets = existingTargetSets.map(cloneSetData);
+                    for (let setIdx = 0; setIdx < limit; setIdx++) {
+                        mergedSets[setIdx] = cloneSetData(sourceSets[setIdx]);
+                    }
+                    lotInitialBySafeId[targetSafeId] = lotInitialBySafeId[targetSafeId] || {};
+                    lotInitialBySafeId[targetSafeId].sets_data = mergedSets;
+                    lotInitialBySafeId[targetSafeId].num_sets = targetSetCount;
+                } else {
+                    lotInitialBySafeId[targetSafeId] = lotInitialBySafeId[targetSafeId] || {};
+                    lotInitialBySafeId[targetSafeId].sets_data = sourceSets.map(cloneSetData);
+                    lotInitialBySafeId[targetSafeId].num_sets = sourceSetCount;
+                }
+            });
+
+            scheduleAutoSave();
+            document.getElementById('copy-step-1')?.classList.add('hidden');
+            document.getElementById('copy-step-2')?.classList.add('hidden');
+            document.getElementById('copy-diff-prompt')?.classList.add('hidden');
+            document.getElementById('copy-success')?.classList.remove('hidden');
+        }
+
+        async function persistConfigNow() {
+            const payload = buildConfigPayload();
+            const anyEnabled = Object.values(payload.symbols || {}).some(s => s.enabled);
+            if (!anyEnabled) return null;
+            return await apiCall('/config', 'POST', payload);
+        }
+
+        async function executeLotCopy() {
+            const modal = document.getElementById('copy-lots-modal');
+            const sourceSymbol = modal?.dataset.copySource || '';
+            if (!sourceSymbol) {
+                alert('Please select a source asset first.');
+                return;
+            }
+            const targetSymbols = Array.from(document.querySelectorAll('input[name="copy-target"]:checked')).map(cb => cb.value);
+            if (targetSymbols.length === 0) {
+                alert('Please select at least one target asset.');
+                return;
+            }
+
+            const sourceSetCount = getSymbolSetCount(sourceSymbol);
+            const differingTargets = targetSymbols.filter(symbol => getSymbolSetCount(symbol) !== sourceSetCount);
+
+            if (differingTargets.length > 0) {
+                const msg = document.getElementById('copy-diff-msg');
+                if (msg) {
+                    msg.textContent = `Source has ${sourceSetCount} set(s). ${differingTargets.length} selected target(s) have a different set count.`;
+                }
+                window.__pendingCopyLots = { sourceSymbol, targetSymbols };
+                document.getElementById('copy-step-2')?.classList.add('hidden');
+                document.getElementById('copy-diff-prompt')?.classList.remove('hidden');
+                return;
+            }
+
+            applyLotCopy(sourceSymbol, targetSymbols, 'overwrite');
+            await persistConfigNow();
+        }
+
+        function initAutoSave() {
+            const enabled = localStorage.getItem('autosave_enabled');
+            autoSaveEnabled = enabled === null ? true : enabled === 'true';
+            updateAutoSaveToggleUI();
+        }
+
+        function updateAutoSaveToggleUI() {
+            const toggle = document.getElementById('autosave-toggle');
+            const knob = document.getElementById('autosave-knob');
+            const status = document.getElementById('autosave-status');
+            if (!toggle) return;
+            toggle.setAttribute('aria-checked', String(!!autoSaveEnabled));
+            toggle.className = `relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoSaveEnabled ? 'bg-emerald-500' : 'bg-slate-600'}`;
+            if (knob) {
+                knob.className = `inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${autoSaveEnabled ? 'translate-x-5' : 'translate-x-1'}`;
+            }
+            if (status) {
+                status.textContent = autoSaveEnabled ? 'Auto-save enabled' : 'Auto-save disabled';
+                status.classList.remove('hidden');
+            }
+        }
+
+        function toggleAutoSave() {
+            autoSaveEnabled = !autoSaveEnabled;
+            localStorage.setItem('autosave_enabled', String(autoSaveEnabled));
+            updateAutoSaveToggleUI();
+        }
+
+        function scheduleAutoSave(delayMs = AUTO_SAVE_DEBOUNCE_MS) {
+            if (!autoSaveEnabled) return;
+            if (autoSaveTimer) clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(async () => {
+                const payload = buildConfigPayload();
+                const anyEnabled = Object.values(payload.symbols || {}).some(s => s.enabled);
+                if (!anyEnabled) return;
+                await apiCall('/config', 'POST', payload);
+            }, delayMs);
+        }
+
+        async function updateConfig(e) {
+            e.preventDefault();
+            const payload = buildConfigPayload();
+            // payload may be null if nothing selected; we still include all symbols so check enabled flags
+            // Ensure at least one enabled symbol
+            const anyEnabled = Object.values(payload.symbols || {}).some(s => s.enabled);
+            if (!anyEnabled) { alert('Please select at least one asset!'); return; }
+            console.log('Sending multi-asset config payload with sets:', payload);
             const updated = await apiCall('/config', 'POST', payload);
             if (updated) {
                 currentConfig = updated;
-                log("Configuration updated.");
+                log('Configuration updated.');
                 renderAssetSettings();
             } else {
-                log("Update failed.");
+                log('Update failed.');
             }
         }
 
