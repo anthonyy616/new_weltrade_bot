@@ -565,7 +565,7 @@
                     return;
                 }
 
-                // Now simulate bounces sequentially across sets
+                // Now simulate bounces sequentially across sets with accumulation
                 for (let sIdx = 0; sIdx < sets.length; sIdx++) {
                     const st = sets[sIdx];
                     const groups = st.groups;
@@ -575,8 +575,19 @@
                         const ps = st.pairSell[pairStageIdx] || 0;
                         const singleLot = st.single[g] || 0;
 
-                        const openVol = pb + ps + singleLot;
-                        cumulativeOpen = openVol;
+                        // Determine closedLot approximation
+                        let closedLot = 0;
+                        if (sIdx === 0 && g === 0) {
+                            // First bounce: close center pair buy leg approximation
+                            closedLot = (sets[0].pairBuy[0] || 0);
+                        } else {
+                            // Subsequent bounces: approximate closed lot as previous stage pairBuy
+                            const prevIdx = Math.max(0, pairStageIdx - 1);
+                            closedLot = (st.pairBuy[prevIdx] || 0);
+                        }
+
+                        // Accumulate: one closes, three open -> net change = -closedLot + pb + ps + singleLot
+                        cumulativeOpen = cumulativeOpen - closedLot + pb + ps + singleLot;
 
                         if (cumulativeOpen > limit) {
                             const suffix = `_set_${sIdx}`;
@@ -758,6 +769,11 @@
             const global = cfg.global || {};
             if (global.max_runtime_minutes !== undefined) {
                 document.getElementById('max_runtime_minutes').value = global.max_runtime_minutes;
+            }
+            if (global.volatility_tolerance !== undefined && ["off","1.25","1.5"].includes(global.volatility_tolerance)) {
+                document.getElementById('volatility_tolerance').value = global.volatility_tolerance;
+            } else {
+                document.getElementById('volatility_tolerance').value = 'off';
             }
         }
 
@@ -1113,7 +1129,7 @@
 
         // Build payload from DOM values (used by manual save and auto-save)
         function buildConfigPayload() {
-            const payload = { global: { max_runtime_minutes: parseInt(document.getElementById('max_runtime_minutes').value) || 0 }, symbols: {} };
+            const payload = { global: { max_runtime_minutes: parseInt(document.getElementById('max_runtime_minutes').value) || 0, volatility_tolerance: document.getElementById('volatility_tolerance')?.value || 'off' }, symbols: {} };
             document.querySelectorAll('.symbol-check').forEach(cb => {
                 const symbol = cb.value;
                 const safeId = symbol.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
