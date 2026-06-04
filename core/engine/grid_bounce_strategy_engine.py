@@ -455,7 +455,7 @@ class GridBounceStrategyEngine:
             await self._check_virtual_stops(ask, bid)
 
             # 1. Volatility/slippage tolerant reset check (new)
-            await self._check_volatility_slippage(ask, bid)
+            # await self._check_volatility_slippage(ask, bid)
 
             # 2. Update touch flags FIRST (PRESERVED)
             self._update_touch_flags(ask, bid)
