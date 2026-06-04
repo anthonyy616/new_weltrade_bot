@@ -1013,6 +1013,33 @@
             populateCopySourceList();
         }
 
+        function getSelectedAssetSymbols() {
+            return Array.from(document.querySelectorAll('.symbol-check:checked')).map(cb => cb.value);
+        }
+
+        function getCopyCandidateSymbols() {
+            const selectedSymbols = getSelectedAssetSymbols();
+            return Object.entries(currentConfig?.symbols || {})
+                .filter(([, cfg]) => cfg?.enabled)
+                .map(([symbol]) => symbol);
+        }
+
+        function getPreferredCopySelectionSymbols() {
+            const selectedSymbols = getSelectedAssetSymbols();
+            if (selectedSymbols.length > 0) {
+                return selectedSymbols;
+            }
+            return getCopyCandidateSymbols();
+        }
+
+        function getDefaultCopySourceSymbol() {
+            const candidateSymbols = getPreferredCopySelectionSymbols();
+            if (lastInteracted?.symbol && candidateSymbols.includes(lastInteracted.symbol)) {
+                return lastInteracted.symbol;
+            }
+            return candidateSymbols[0] || '';
+        }
+
         function closeCopyLotsModal() {
             const modal = document.getElementById('copy-lots-modal');
             if (!modal) return;
@@ -1023,13 +1050,12 @@
         function populateCopySourceList() {
             const list = document.getElementById('copy-source-list');
             if (!list) return;
-            const symbols = Object.entries(currentConfig?.symbols || {})
-                .filter(([, cfg]) => cfg?.enabled)
-                .map(([symbol]) => symbol);
+            const symbols = getCopyCandidateSymbols();
+            const defaultSource = getDefaultCopySourceSymbol();
             list.innerHTML = symbols.length
                 ? symbols.map(symbol => `
                     <label class="flex items-center gap-2 p-1 rounded hover:bg-slate-700/30 cursor-pointer">
-                        <input type="radio" name="copy-source" value="${symbol}" class="h-4 w-4 accent-indigo-500">
+                        <input type="radio" name="copy-source" value="${symbol}" class="h-4 w-4 accent-indigo-500" ${symbol === defaultSource ? 'checked' : ''}>
                         <span class="text-xs text-slate-200">${symbol}</span>
                     </label>
                 `).join('')
@@ -1039,13 +1065,16 @@
         function populateCopyTargetList(sourceSymbol) {
             const list = document.getElementById('copy-target-list');
             if (!list) return;
-            const symbols = Object.entries(currentConfig?.symbols || {})
-                .filter(([symbol, cfg]) => symbol !== sourceSymbol && cfg?.enabled)
-                .map(([symbol]) => symbol);
+            const preferredTargets = getPreferredCopySelectionSymbols().filter(symbol => symbol !== sourceSymbol);
+            const symbols = preferredTargets.length > 0
+                ? preferredTargets
+                : Object.entries(currentConfig?.symbols || {})
+                    .filter(([symbol, cfg]) => symbol !== sourceSymbol && cfg?.enabled)
+                    .map(([symbol]) => symbol);
             list.innerHTML = symbols.length
                 ? symbols.map(symbol => `
                     <label class="flex items-center gap-2 p-1 rounded hover:bg-slate-700/30 cursor-pointer">
-                        <input type="checkbox" name="copy-target" value="${symbol}" class="h-4 w-4 accent-emerald-500">
+                        <input type="checkbox" name="copy-target" value="${symbol}" class="h-4 w-4 accent-emerald-500" ${preferredTargets.includes(symbol) ? 'checked' : ''}>
                         <span class="text-xs text-slate-200">${symbol}</span>
                     </label>
                 `).join('')
@@ -1157,9 +1186,7 @@
                     const setsSelect = document.getElementById(`sets_${targetSafeId}`);
                     if (setsSelect) setsSelect.value = String(sourceSetCount);
                     updateLotInputs(targetSymbol, targetSafeId);
-                    setTimeout(() => {
-                        sourceSets.forEach((setData, setIdx) => fillSetInputs(targetSafeId, setIdx, setData));
-                    }, 0);
+                    sourceSets.forEach((setData, setIdx) => fillSetInputs(targetSafeId, setIdx, setData));
                     return;
                 }
 
@@ -1253,27 +1280,29 @@
                 return;
             }
             const targetSymbols = Array.from(document.querySelectorAll('input[name="copy-target"]:checked')).map(cb => cb.value);
-            if (targetSymbols.length === 0) {
+            const fallbackTargets = getCopyCandidateSymbols().filter(symbol => symbol !== sourceSymbol);
+            const copyTargets = targetSymbols.length > 0 ? targetSymbols : fallbackTargets;
+            if (copyTargets.length === 0) {
                 alert('Please select at least one target asset.');
                 return;
             }
 
             const sourceSetCount = getSymbolSetCount(sourceSymbol);
-            const differingTargets = targetSymbols.filter(symbol => getSymbolSetCount(symbol) !== sourceSetCount);
+            const differingTargets = copyTargets.filter(symbol => getSymbolSetCount(symbol) !== sourceSetCount);
 
             if (differingTargets.length > 0) {
                 const msg = document.getElementById('copy-diff-msg');
                 if (msg) {
                     msg.textContent = `Source has ${sourceSetCount} set(s). ${differingTargets.length} selected target(s) have a different set count.`;
                 }
-                window.__pendingCopyLots = { sourceSymbol, targetSymbols };
+                window.__pendingCopyLots = { sourceSymbol, targetSymbols: copyTargets };
                 document.getElementById('copy-step-2')?.classList.add('hidden');
                 document.getElementById('copy-diff-prompt')?.classList.remove('hidden');
                 return;
             }
 
-            applyLotCopy(sourceSymbol, targetSymbols, 'overwrite');
-            const payload = buildCopiedConfigPayload(sourceSymbol, targetSymbols, 'overwrite');
+            applyLotCopy(sourceSymbol, copyTargets, 'overwrite');
+            const payload = buildCopiedConfigPayload(sourceSymbol, copyTargets, 'overwrite');
             await saveConfigPayload(payload);
         }
 

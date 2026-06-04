@@ -1036,10 +1036,10 @@ class GridBounceStrategyEngine:
             return aligned_tp, aligned_sl, True
 
         error = result.comment if result else mt5.last_error()
-        self.activity_log.log_info(
-            f"Failed to align {direction.upper()} position #{ticket} TP/SL ({error}). "
-            f"Keeping original: TP={calculated_tp:.5f}, SL={calculated_sl:.5f}"
-        )
+        #self.activity_log.log_info(
+            #f"Failed to align {direction.upper()} position #{ticket} TP/SL ({error}). "
+            #f"Keeping original: TP={calculated_tp:.5f}, SL={calculated_sl:.5f}"
+        #)
         return calculated_tp, calculated_sl, False
 
     #TP/SL detection helpers (Same as old logic)

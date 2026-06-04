@@ -49,7 +49,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Auth Cache (30 seconds - shorter TTL for multi-user support)
-auth_cache = TTLCache(maxsize=100, ttl=30)
+auth_cache = TTLCache(maxsize=100, ttl=120)
 
 # --- 1. Initialize Core Systems ---
 bot_manager = BotManager()

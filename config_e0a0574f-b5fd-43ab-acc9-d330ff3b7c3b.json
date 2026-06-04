@@ -133,7 +133,7 @@
             ]
         },
         "FX Vol 80": {
-            "enabled": false,
+            "enabled": true,
             "grid_distance": 100.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
@@ -172,7 +172,7 @@
             ]
         },
         "FX Vol 99": {
-            "enabled": false,
+            "enabled": true,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
