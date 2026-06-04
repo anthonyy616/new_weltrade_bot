@@ -156,7 +156,14 @@ class ConfigManager:
         """
         # Handle global settings
         if "global" in new_config:
-            self.config["global"].update(new_config["global"])
+            # Validate volatility_tolerance if provided
+            global_updates = dict(new_config["global"])
+            if "volatility_tolerance" in global_updates:
+                val = global_updates.get("volatility_tolerance")
+                if val not in ("off", "1.25", "1.5"):
+                    # reject invalid value by removing it
+                    global_updates.pop("volatility_tolerance", None)
+            self.config["global"].update(global_updates)
         
         # Handle symbol-specific settings
         if "symbols" in new_config:
@@ -327,7 +334,8 @@ class ConfigManager:
         """Generate default multi-asset config structure"""
         return {
             "global": {
-                "max_runtime_minutes": 0
+                "max_runtime_minutes": 0,
+                "volatility_tolerance": "off"
             },
             "symbols": {
                 symbol: get_default_symbol_config()

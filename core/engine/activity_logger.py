@@ -192,6 +192,7 @@ class ActivityLogger:
             "SINGLE_FIRE_CLOSED": "Recovery trade completed (TP or SL hit)",
             "MAX_PROFIT": "Maximum profit target reached",
             "MAX_LOSS": "Maximum loss limit reached",
+            "VOLATILITY_RESET": "Volatility/slippage threshold exceeded — automatic safety reset",
         }
         friendly_reason = friendly_reasons.get(reason, reason)
 

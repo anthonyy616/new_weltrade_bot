@@ -13,6 +13,33 @@ from core.persistence.repository import Repository
 logger = logging.getLogger("pair_strategy")
 mt5: Any = mt5_module
 
+# --- Hardcoded immutable asset limits (module-level constants) ---
+MAX_LOT_PER_ASSET = {
+    "FX Vol 20": 7,
+    "FX Vol 40": 4,
+    "FX Vol 60": 5,
+    "FX Vol 80": 1,
+    "FX Vol 99": 4,
+    "SFX Vol 20": 5,
+    "SFX Vol 40": 1,
+    "SFX Vol 60": 1,
+    "SFX Vol 80": 2,
+    "SFX Vol 99": 2,
+}
+
+MIN_STOP_PIPS_PER_ASSET = {
+    "FX Vol 20": 11,
+    "FX Vol 40": 27,
+    "FX Vol 60": 19,
+    "FX Vol 80": 34,
+    "FX Vol 99": 42,
+    "SFX Vol 20": 21,
+    "SFX Vol 40": 74,
+    "SFX Vol 60": 59,
+    "SFX Vol 80": 86,
+    "SFX Vol 99": 18,
+}
+
 
 
 @dataclass
@@ -102,6 +129,10 @@ class GridBounceStrategyEngine:
         self.activity_log = ActivityLogger(symbol, user_id, session_logger)
         self.repository: Optional[Repository] = None
         self._position_drop_detected = False
+        # Split-group tracking for max-lot splitting
+        # map: split_group_id -> [ticket,...]
+        self.state.split_group_map = {}
+        self._split_group_counter = 0
     
     # Config accessors
     @property
@@ -239,6 +270,16 @@ class GridBounceStrategyEngine:
             return (tick.ask + tick.bid) / 2
         return self.state.center_price
 
+    @property
+    def volatility_tolerance_factor(self):
+        val = self.config_manager.get_global_config().get('volatility_tolerance', 'off')
+        if val == 'off' or val is None:
+            return None
+        try:
+            return float(val)
+        except Exception:
+            return None
+
     def advance_to_next_set(self):
         """
         Advance to the next set when current set reaches max_positions.
@@ -311,58 +352,85 @@ class GridBounceStrategyEngine:
                 f"pair_buy={self.pair_buy_lots}, pair_sell={self.pair_sell_lots}, single={self.single_lots}"
             )
         
-        # Open initial pair at center
+        # Open initial pair at center (with max-lot splitting)
         center_buy_lot = self._pair_buy_lot_for_stage(0)
         center_sell_lot = self._pair_sell_lot_for_stage(0)
-        buy_ticket, buy_entry, buy_tp, buy_sl = await self._execute_market_order(
-            "buy", center_buy_lot, "CenterBuy", center, skip_tp_sl=True
-        )
-        sell_ticket, sell_entry, sell_tp, sell_sl = await self._execute_market_order(
-            "sell", center_sell_lot, "CenterSell", center, skip_tp_sl=True
-        )
+        buy_results = await self._split_and_execute_orders("buy", center_buy_lot, "CenterBuy", center, skip_tp_sl=True)
+        sell_results = await self._split_and_execute_orders("sell", center_sell_lot, "CenterSell", center, skip_tp_sl=True)
 
+        def _first(res):
+            if res and len(res) > 0:
+                return res[0]
+            return (0, 0.0, 0.0, 0.0)
+
+        buy_ticket, buy_entry, buy_tp, buy_sl = _first(buy_results)
+        sell_ticket, sell_entry, sell_tp, sell_sl = _first(sell_results)
         self.activity_log.log_info(
             "Center positions opened without TP/SL (will be added after second entry)"
         )
         
         # Store in grid_level_1
         if buy_ticket:
-            self.state.grid_level_1.positions[buy_ticket] = {
-                'leg': 'CenterBuy',
-                'direction': 'buy',
-                'entry': buy_entry,
-                'tp': 0.0,
-                'sl': 0.0,
-                'lot': center_buy_lot,
-                'position_type': 'pair',
-                'has_virtual_stops': False
-            }
-            self.state.ticket_map[buy_ticket] = self.state.grid_level_1.positions[buy_ticket]
-            self._init_touch_flags(buy_ticket)
-            self.activity_log.log_fire(
-                self.state.cycle_count, "CenterBuy", buy_entry,
-                center_buy_lot, buy_tp,
-                buy_sl, buy_ticket
-            )
+            # register all split tickets for buy
+            tickets = []
+            for (tkt, entry, tp, sl) in buy_results:
+                if not tkt:
+                    continue
+                self.state.grid_level_1.positions[tkt] = {
+                    'leg': 'CenterBuy',
+                    'direction': 'buy',
+                    'entry': entry,
+                    'tp': 0.0,
+                    'sl': 0.0,
+                    'lot': center_buy_lot,
+                    'position_type': 'pair',
+                    'has_virtual_stops': False
+                }
+                self.state.ticket_map[tkt] = self.state.grid_level_1.positions[tkt]
+                self._init_touch_flags(tkt)
+                self.activity_log.log_fire(
+                    self.state.cycle_count, "CenterBuy", entry,
+                    center_buy_lot, tp,
+                    sl, tkt
+                )
+                tickets.append(tkt)
+            # record split group
+            if len(tickets) > 1:
+                group_id = tickets[0]
+                self.state.split_group_map[group_id] = list(tickets)
+                for idd in tickets:
+                    if idd in self.state.ticket_map:
+                        self.state.ticket_map[idd]['split_group_id'] = group_id
         
         if sell_ticket:
-            self.state.grid_level_1.positions[sell_ticket] = {
-                'leg': 'CenterSell',
-                'direction': 'sell',
-                'entry': sell_entry,
-                'tp': 0.0,
-                'sl': 0.0,
-                'lot': center_sell_lot,
-                'position_type': 'pair',
-                'has_virtual_stops': False
-            }
-            self.state.ticket_map[sell_ticket] = self.state.grid_level_1.positions[sell_ticket]
-            self._init_touch_flags(sell_ticket)
-            self.activity_log.log_fire(
-                self.state.cycle_count, "CenterSell", sell_entry,
-                center_sell_lot, sell_tp,
-                sell_sl, sell_ticket
-            )
+            tickets = []
+            for (tkt, entry, tp, sl) in sell_results:
+                if not tkt:
+                    continue
+                self.state.grid_level_1.positions[tkt] = {
+                    'leg': 'CenterSell',
+                    'direction': 'sell',
+                    'entry': entry,
+                    'tp': 0.0,
+                    'sl': 0.0,
+                    'lot': center_sell_lot,
+                    'position_type': 'pair',
+                    'has_virtual_stops': False
+                }
+                self.state.ticket_map[tkt] = self.state.grid_level_1.positions[tkt]
+                self._init_touch_flags(tkt)
+                self.activity_log.log_fire(
+                    self.state.cycle_count, "CenterSell", entry,
+                    center_sell_lot, tp,
+                    sl, tkt
+                )
+                tickets.append(tkt)
+            if len(tickets) > 1:
+                group_id = tickets[0]
+                self.state.split_group_map[group_id] = list(tickets)
+                for idd in tickets:
+                    if idd in self.state.ticket_map:
+                        self.state.ticket_map[idd]['split_group_id'] = group_id
         
         self.state.phase = "SINGLE_LEVEL"
         self.state.total_positions = 2
@@ -389,7 +457,10 @@ class GridBounceStrategyEngine:
             # 1. Check virtual TP/SL first so manual closures behave like real ones
             await self._check_virtual_stops(ask, bid)
 
-            # 1. Update touch flags FIRST (PRESERVED)
+            # 1. Volatility/slippage tolerant reset check (new)
+            await self._check_volatility_slippage(ask, bid)
+
+            # 2. Update touch flags FIRST (PRESERVED)
             self._update_touch_flags(ask, bid)
             
             # 2. Check position drops (TP/SL detection) (PRESERVED)
@@ -1090,11 +1161,76 @@ class GridBounceStrategyEngine:
         tracked_tickets = set(self.state.ticket_map.keys())
         dropped = tracked_tickets - current_tickets
         
+        processed_groups = set()
         for ticket in dropped:
             info = self.state.ticket_map.get(ticket)
             if not info:
                 continue
-            
+
+            group_id = info.get('split_group_id')
+            # Handle split-group closure as a single event
+            if group_id:
+                if group_id in processed_groups:
+                    continue
+                processed_groups.add(group_id)
+
+                group_tickets = list(self.state.split_group_map.get(group_id, []))
+                # Compute realized pnl for all tickets in group (closed or will be closed)
+                group_realized = 0.0
+                any_pair = False
+                for t in group_tickets:
+                    tinfo = self.state.ticket_map.get(t)
+                    if not tinfo:
+                        continue
+                    leg = tinfo.get('leg', '')
+                    direction = tinfo.get('direction', '')
+                    entry = tinfo.get('entry', 0)
+                    tp_price = tinfo.get('tp', 0)
+                    sl_price = tinfo.get('sl', 0)
+                    lot = tinfo.get('lot', 0)
+                    position_type = tinfo.get('position_type', 'pair')
+                    any_pair = any_pair or (position_type == 'pair')
+
+                    # Determine TP/SL using touch flags when possible
+                    flags = self.state.ticket_touch_flags.get(t, {})
+                    is_tp = flags.get('tp_touched', False)
+                    is_sl = flags.get('sl_touched', False)
+                    if not is_tp and not is_sl:
+                        check_price = bid if direction == 'buy' else ask
+                        tp_dist = abs(check_price - tp_price)
+                        sl_dist = abs(check_price - sl_price)
+                        is_tp = tp_dist < sl_dist
+                        is_sl = not is_tp
+
+                    close_price = tp_price if is_tp else sl_price
+                    if direction == 'buy':
+                        group_realized += (close_price - entry) * lot
+                    else:
+                        group_realized += (entry - close_price) * lot
+
+                # Close any remaining open tickets in the group
+                for t in list(group_tickets):
+                    if t in (current_tickets or set()):
+                        # close via broker
+                        try:
+                            self._close_position(t)
+                        except Exception:
+                            self.activity_log.log_error(f"Failed to close split-group ticket {t}")
+                # Log as single event
+                self.state.realized_pnl += group_realized
+                if any_pair:
+                    self.activity_log.log_sl_hit(ticket, info.get('leg', ''), 0.0, group_realized, triggered_reset=True)
+                    self._position_drop_detected = True
+                else:
+                    self.activity_log.log_sl_hit(ticket, info.get('leg', ''), 0.0, group_realized, triggered_reset=False)
+
+                # Remove all tickets in group from tracking
+                for t in list(group_tickets):
+                    self._remove_ticket_from_all_levels(t)
+                    self.state.total_positions = max(0, self.state.total_positions - 1)
+                continue
+
+            # Non-split ticket (original logic)
             leg = info.get("leg", "")
             direction = info.get("direction", "")
             entry = info.get("entry", 0)
@@ -1102,12 +1238,12 @@ class GridBounceStrategyEngine:
             sl_price = info.get("sl", 0)
             lot = info.get("lot", 0)
             position_type = info.get("position_type", "pair")  # Default to 'pair' for safety
-            
+
             # Determine TP or SL using touch flags
             flags = self.state.ticket_touch_flags.get(ticket, {})
             is_tp = flags.get("tp_touched", False)
             is_sl = flags.get("sl_touched", False)
-            
+
             # Fallback inference
             if not is_tp and not is_sl:
                 check_price = bid if direction == "buy" else ask
@@ -1115,31 +1251,31 @@ class GridBounceStrategyEngine:
                 sl_dist = abs(check_price - sl_price)
                 is_tp = tp_dist < sl_dist
                 is_sl = not is_tp
-            
+
             # Calculate PnL
             close_price = tp_price if is_tp else sl_price
             if direction == "buy":
                 realized = (close_price - entry) * lot
             else:
                 realized = (entry - close_price) * lot
-            
+
             self.state.realized_pnl += realized
-            
+
             # Determine if this closure triggers reset
             triggers_reset = (position_type == 'pair')
-            
+
             # Log with reset trigger indicator
             if is_tp:
                 self.activity_log.log_tp_hit(ticket, leg, close_price, realized, "", triggered_reset=triggers_reset)
             else:
                 self.activity_log.log_sl_hit(ticket, leg, close_price, realized, triggered_reset=triggers_reset)
-            
+
             # Remove from tracking
             self._remove_ticket_from_all_levels(ticket)
-            
+
             # Decrement total (for both pair and custom singles)
             self.state.total_positions -= 1
-            
+
             # Set reset flag ONLY for pair positions
             if triggers_reset:
                 self._position_drop_detected = True
@@ -1243,20 +1379,47 @@ class GridBounceStrategyEngine:
         - Center positions: always keep position_counter as-is
         """
         info = self.state.ticket_map.get(ticket)
+        group_id = info.get('split_group_id') if info else None
+
+        # Remove from any level containers
         if self.state.grid_level_1 and ticket in self.state.grid_level_1.positions:
             del self.state.grid_level_1.positions[ticket]
         if self.state.grid_level_2 and ticket in self.state.grid_level_2.positions:
             del self.state.grid_level_2.positions[ticket]
+
+        # Remove from ticket tracking
         if ticket in self.state.ticket_map:
             del self.state.ticket_map[ticket]
         if ticket in self.state.ticket_touch_flags:
             del self.state.ticket_touch_flags[ticket]
-        
-        # Only decrement position_counter for pair positions (not center, not custom singles)
+
+        # If ticket belonged to a split group, only decrement position_counter when the last
+        # ticket of the group is removed. Otherwise follow existing logic.
+        if group_id:
+            lst = self.state.split_group_map.get(group_id, [])
+            if ticket in lst:
+                try:
+                    lst.remove(ticket)
+                except ValueError:
+                    pass
+            if not lst:
+                # last ticket removed -> decrement once for pair groups
+                if info:
+                    position_type = info.get('position_type', 'pair')
+                    if position_type == 'pair' and self.state.position_counter > 0:
+                        self.state.position_counter -= 1
+                # cleanup map
+                if group_id in self.state.split_group_map:
+                    del self.state.split_group_map[group_id]
+            else:
+                # update stored list
+                self.state.split_group_map[group_id] = lst
+            return
+
+        # Fallback: Only decrement position_counter for pair positions (not center, not custom singles)
         if info:
             leg = info.get("leg", "")
             position_type = info.get("position_type", "pair")
-            
             # Center positions don't decrement position_counter
             if leg in {"CenterBuy", "CenterSell"}:
                 pass  # Do nothing
@@ -1391,10 +1554,56 @@ class GridBounceStrategyEngine:
         
         result = mt5.order_send(request)
         
-        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            error = mt5.last_error() if result is None else result.comment
+        # Handle MT5 response; on invalid stops, retry once using hardcoded per-asset stop level
+        if result is None:
+            error = mt5.last_error()
             self.activity_log.log_error(f"{leg_name} order failed: {error}")
             return 0, 0.0, 0.0, 0.0
+
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            # Only retry on invalid stops error
+            invalid_code = getattr(mt5, 'TRADE_RETCODE_INVALID_STOPS', 10016)
+            if result.retcode == invalid_code:
+                # compute hardcoded stop level pips for this asset
+                stop_pips = MIN_STOP_PIPS_PER_ASSET.get(self.symbol, 10)
+                # Recalculate SL relative to exec_price
+                if direction == 'buy':
+                    new_sl = exec_price - float(stop_pips)
+                else:
+                    new_sl = exec_price + float(stop_pips)
+
+                # Apply same stops-level safety clamp used above
+                symbol_info = mt5.symbol_info(self.symbol)
+                if symbol_info and not skip_tp_sl:
+                    point = symbol_info.point
+                    stops_level = max(symbol_info.trade_stops_level, 10)
+                    min_dist = stops_level * point
+                    check_price = tick.bid if direction == 'buy' else tick.ask
+                    if direction == 'buy':
+                        if new_sl > check_price - min_dist:
+                            new_sl = check_price - min_dist
+                    else:
+                        if new_sl < check_price + min_dist:
+                            new_sl = check_price + min_dist
+
+                # Build retry request with updated SL and original TP
+                retry_req = dict(request)
+                if not skip_tp_sl:
+                    retry_req['sl'] = float(new_sl)
+                    retry_req['tp'] = float(tp)
+
+                retry_res = mt5.order_send(retry_req)
+                if retry_res and retry_res.retcode == mt5.TRADE_RETCODE_DONE:
+                    self.activity_log.log_info(f"{leg_name}: Order retried with hardcoded stop level ({stop_pips} pips) and succeeded")
+                    result = retry_res
+                else:
+                    err = retry_res.comment if retry_res else mt5.last_error()
+                    self.activity_log.log_error(f"{leg_name} order failed after retry: {err}")
+                    return 0, 0.0, 0.0, 0.0
+            else:
+                error = result.comment
+                self.activity_log.log_error(f"{leg_name} order failed: {error}")
+                return 0, 0.0, 0.0, 0.0
         
         ticket = result.order
         
@@ -1421,6 +1630,60 @@ class GridBounceStrategyEngine:
         
         # Return the actual ticket, actual entry price, and final TP/SL used (post-clamp)
         return actual_ticket, actual_entry, float(tp), float(sl)
+
+
+    async def _split_and_execute_orders(self, direction: str, lot_size: float,
+                                       leg_name: str, target_price: float,
+                                       tp_pips_override: Optional[float] = None,
+                                       sl_pips_override: Optional[float] = None,
+                                       skip_tp_sl: bool = False) -> List[Tuple[int, float, float, float]]:
+        """
+        Split large lots into multiple orders not exceeding MAX_LOT_PER_ASSET and execute sequentially.
+        Returns list of (ticket, entry, tp, sl) tuples in call order.
+        """
+        max_lot = MAX_LOT_PER_ASSET.get(self.symbol, 100)
+        if lot_size <= max_lot:
+            res = await self._execute_market_order(direction, lot_size, leg_name, target_price, tp_pips_override, sl_pips_override, skip_tp_sl)
+            return [res]
+
+        remaining = float(lot_size)
+        chunks = []
+        while remaining > 0 and len(chunks) < 20:
+            chunk = min(remaining, float(max_lot))
+            chunks.append(chunk)
+            remaining -= chunk
+
+        results = []
+        for chunk in chunks:
+            res = await self._execute_market_order(direction, chunk, leg_name, target_price, tp_pips_override, sl_pips_override, skip_tp_sl)
+            results.append(res)
+
+        return results
+
+    async def _check_volatility_slippage(self, ask: float, bid: float):
+        """
+        Check for excessive mid-price deviation from center when TWO_LEVELS active and
+        trigger VOLATILITY reset if threshold exceeded.
+        """
+        factor = self.volatility_tolerance_factor
+        if factor is None:
+            return
+        if self.state.phase != "TWO_LEVELS":
+            return
+        if not self.state.center_price or self.state.center_price == 0:
+            return
+
+        mid = (ask + bid) / 2
+        distance = abs(mid - self.state.center_price)
+        threshold = float(self.grid_distance) * float(factor)
+        if distance >= threshold:
+            self.activity_log.log_info(
+                f"VOLATILITY RESET: Price distance {distance:.5f} from center {self.state.center_price:.5f} exceeds {factor}x grid distance threshold {threshold:.5f}. Triggering nuclear reset."
+            )
+            # prevent double reset
+            self._position_drop_detected = False
+            await self._nuclear_reset_and_restart("VOLATILITY_RESET", self.state.realized_pnl)
+            return
 
     async def _add_tp_sl_to_position(self, ticket: int, direction: str, entry_price: float) -> Tuple[bool, float, float]:
         """

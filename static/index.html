@@ -318,6 +318,16 @@
                                     class="w-full p-1.5 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500">
                             </div>
 
+                            <div>
+                                <label class="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Volatility
+                                    Tolerance</label>
+                                <select id="volatility_tolerance" onchange="scheduleAutoSave()" class="w-full p-1.5 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    <option value="off">Off</option>
+                                    <option value="1.25">1.25x</option>
+                                    <option value="1.5">1.5x</option>
+                                </select>
+                            </div>
+
                             <!-- Auto-save toggle -->
                             <div class="col-span-2 flex items-center justify-between mt-1 p-1.5 bg-slate-800 rounded border border-slate-600">
                                 <label class="text-[10px] text-slate-400 leading-tight">
@@ -444,6 +454,156 @@
             gear: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 inline-block mr-1"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-1.1 1.92-1.1 2.22 0l.2.737a1 1 0 0 0 .948.738l.77-.04c1.17-.06 1.66 1.352.65 1.92l-.635.313a1 1 0 0 0-.364 1.364l.29.53c.52.95-.2 2.09-1.34 2.09h-.86a1 1 0 0 0-.94.667l-.25.66c-.35.93-1.7.93-2.05 0l-.25-.66a1 1 0 0 0-.94-.667h-.86c-1.14 0-1.86-1.14-1.34-2.09l.29-.53a1 1 0 0 0-.364-1.364L4.99 6.272c-1.01-.568-.52-1.98.65-1.92l.77.04a1 1 0 0 0 .948-.738l.2-.737z"/></svg>`,
             chart: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4 inline-block mr-1 text-purple-500"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18"/></svg>`
         };
+
+        // Asset volume limits (frontend simulation only)
+        const ASSET_VOLUME_LIMITS = {
+            "FX Vol 20": 14,
+            "FX Vol 40": 6,
+            "FX Vol 60": 14,
+            "FX Vol 80": 9,
+            "FX Vol 99": 6,
+            "SFX Vol 20": 18,
+            "SFX Vol 40": 7,
+            "SFX Vol 60": 2,
+            "SFX Vol 80": 2,
+            "SFX Vol 99": 34,
+        };
+
+        // Simulation debounce timers per asset
+        const _simulateTimers = {};
+        // Track currently flagged inputs by safeId
+        const _flaggedFieldsBySafeId = {};
+        // lastInteracted object (symbol, safeId)
+        let lastInteracted = null;
+
+        function setLastInteracted(symbol, safeId) {
+            lastInteracted = { symbol, safeId };
+            // debounce simulate run for this asset
+            if (_simulateTimers[safeId]) clearTimeout(_simulateTimers[safeId]);
+            _simulateTimers[safeId] = setTimeout(() => {
+                simulateVolumeAccumulation(symbol, safeId);
+            }, 600);
+        }
+
+        function _markFieldExceeded(el) {
+            if (!el) return;
+            el.classList.add('border-2', 'border-red-500');
+        }
+
+        function _clearFieldWarningsForSafeId(safeId) {
+            const flagged = _flaggedFieldsBySafeId[safeId] || [];
+            for (const id of flagged) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('border-2', 'border-red-500');
+                }
+            }
+            _flaggedFieldsBySafeId[safeId] = [];
+        }
+
+        function _showVolumeWarning(symbol, fieldLabel) {
+            let popup = document.getElementById('volume-warning-popup');
+            if (!popup) return;
+            const sym = popup.querySelector('.vw-symbol');
+            const fld = popup.querySelector('.vw-field');
+            if (sym) sym.textContent = symbol;
+            if (fld) fld.textContent = fieldLabel;
+            popup.classList.remove('hidden');
+        }
+
+        function _hideVolumeWarning() {
+            const popup = document.getElementById('volume-warning-popup');
+            if (popup) popup.classList.add('hidden');
+        }
+
+        async function simulateVolumeAccumulation(symbol, safeId) {
+            try {
+                _clearFieldWarningsForSafeId(safeId);
+                _hideVolumeWarning();
+
+                const limit = ASSET_VOLUME_LIMITS[symbol];
+                if (!limit) return;
+
+                // Read sets and per-set values from DOM
+                const numSets = parseInt(document.getElementById(`sets_${safeId}`)?.value) || 1;
+                const sets = [];
+                for (let s = 0; s < numSets; s++) {
+                    const suffix = `_set_${s}`;
+                    const groups = Math.max(1, parseInt(document.getElementById(`maxpos_${safeId}${suffix}`)?.value) || 1);
+
+                    const pairBuy = [];
+                    const pairSell = [];
+                    const single = [];
+                    for (let p = 1; p <= groups + 1; p++) {
+                        const pb = parseFloat(document.getElementById(`pairbuy_${safeId}${suffix}_${p}`)?.value) || 0;
+                        const ps = parseFloat(document.getElementById(`pairsell_${safeId}${suffix}_${p}`)?.value) || 0;
+                        pairBuy.push(pb);
+                        pairSell.push(ps);
+                    }
+                    for (let g = 1; g <= groups; g++) {
+                        const sVal = parseFloat(document.getElementById(`single_${safeId}${suffix}_${g}`)?.value) || 0;
+                        single.push(sVal);
+                    }
+                    sets.push({ pairBuy, pairSell, single, groups, max_positions: groups * 3 });
+                }
+
+                // Simulation sequence
+                // Step0: center pair
+                if (sets.length === 0) return;
+                let cumulativeOpen = (sets[0].pairBuy[0] || 0) + (sets[0].pairSell[0] || 0);
+                if (cumulativeOpen > limit) {
+                    const pbEl = document.getElementById(`pairbuy_${safeId}_set_0_1`);
+                    const psEl = document.getElementById(`pairsell_${safeId}_set_0_1`);
+                    const valPb = parseFloat(pbEl?.value) || 0;
+                    const valPs = parseFloat(psEl?.value) || 0;
+                    const fieldEl = valPb >= valPs ? pbEl : psEl;
+                    if (fieldEl) {
+                        _flaggedFieldsBySafeId[safeId] = [fieldEl.id];
+                        _markFieldExceeded(fieldEl);
+                        _showVolumeWarning(symbol, fieldEl.previousElementSibling?.textContent || fieldEl.id);
+                    }
+                    return;
+                }
+
+                // Now simulate bounces sequentially across sets
+                for (let sIdx = 0; sIdx < sets.length; sIdx++) {
+                    const st = sets[sIdx];
+                    const groups = st.groups;
+                    for (let g = 0; g < groups; g++) {
+                        const pairStageIdx = Math.min(g + 1, st.pairBuy.length - 1);
+                        const pb = st.pairBuy[pairStageIdx] || 0;
+                        const ps = st.pairSell[pairStageIdx] || 0;
+                        const singleLot = st.single[g] || 0;
+
+                        const openVol = pb + ps + singleLot;
+                        cumulativeOpen = openVol;
+
+                        if (cumulativeOpen > limit) {
+                            const suffix = `_set_${sIdx}`;
+                            const pbEl = document.getElementById(`pairbuy_${safeId}${suffix}_${pairStageIdx + 1}`);
+                            const psEl = document.getElementById(`pairsell_${safeId}${suffix}_${pairStageIdx + 1}`);
+                            const singleEl = document.getElementById(`single_${safeId}${suffix}_${g + 1}`);
+                            const vals = [ (pbEl ? parseFloat(pbEl.value)||0 : 0), (psEl ? parseFloat(psEl.value)||0 : 0), (singleEl ? parseFloat(singleEl.value)||0 : 0) ];
+                            const maxIdx = vals.indexOf(Math.max(...vals));
+                            const fieldEl = maxIdx === 0 ? pbEl : (maxIdx === 1 ? psEl : singleEl);
+                            if (fieldEl) {
+                                _flaggedFieldsBySafeId[safeId] = [fieldEl.id];
+                                _markFieldExceeded(fieldEl);
+                                const label = fieldEl.previousElementSibling?.textContent || fieldEl.id;
+                                _showVolumeWarning(symbol, label);
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                // No breach found: clear any previous flags
+                _clearFieldWarningsForSafeId(safeId);
+                _hideVolumeWarning();
+            } catch (e) {
+                console.error('simulateVolumeAccumulation error', e);
+            }
+        }
 
         // --- 1. UI State Helpers ---
         function setLoggedInState(session) {
@@ -1671,6 +1831,19 @@
         // Start
         initSupabase();
     </script>
+
+    <!-- Volume limit warning popup -->
+    <div id="volume-warning-popup" class="fixed right-4 bottom-4 bg-red-600 text-white p-3 rounded shadow-lg hidden z-50 max-w-sm">
+        <div class="flex items-start gap-3">
+            <div class="flex-1">
+                <div class="text-sm">Volume limit exceeded for <span class="font-semibold vw-symbol"></span></div>
+                <div class="text-xs opacity-90">Field: <span class="vw-field font-medium"></span></div>
+            </div>
+            <div class="flex-shrink-0">
+                <button onclick="_hideVolumeWarning()" class="text-white/90 hover:text-white">Dismiss</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
