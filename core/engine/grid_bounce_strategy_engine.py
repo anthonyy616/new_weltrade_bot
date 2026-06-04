@@ -97,6 +97,7 @@ class StrategyState:
     # Ticket tracking (global across all levels)
     ticket_map: Dict[int, dict] = field(default_factory=dict)
     ticket_touch_flags: Dict[int, dict] = field(default_factory=dict)
+    split_group_map: Dict[int, List[int]] = field(default_factory=dict)
 
 
 # core logic for managing the 2-grid bounce strategy
@@ -129,10 +130,6 @@ class GridBounceStrategyEngine:
         self.activity_log = ActivityLogger(symbol, user_id, session_logger)
         self.repository: Optional[Repository] = None
         self._position_drop_detected = False
-        # Split-group tracking for max-lot splitting
-        # map: split_group_id -> [ticket,...]
-        self.state.split_group_map = {}
-        self._split_group_counter = 0
     
     # Config accessors
     @property
