@@ -5,7 +5,7 @@
     },
     "symbols": {
         "FX Vol 20": {
-            "enabled": false,
+            "enabled": true,
             "grid_distance": 25.0,
             "tp_pips": 30.0,
             "sl_pips": 55.0,
@@ -95,7 +95,7 @@
             ]
         },
         "FX Vol 40": {
-            "enabled": false,
+            "enabled": true,
             "grid_distance": 80.0,
             "tp_pips": 85.0,
             "sl_pips": 155.0,
@@ -275,7 +275,7 @@
             ]
         },
         "FX Vol 80": {
-            "enabled": false,
+            "enabled": true,
             "grid_distance": 50.0,
             "tp_pips": 55.0,
             "sl_pips": 95.0,
@@ -677,7 +677,7 @@
             ]
         },
         "SFX Vol 80": {
-            "enabled": true,
+            "enabled": false,
             "grid_distance": 50.0,
             "tp_pips": 150.0,
             "sl_pips": 200.0,
@@ -726,20 +726,41 @@
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
-            "max_positions": 6,
+            "max_positions": 27,
             "pair_buy_lots": [
-                2.5,
-                4.01,
-                1.5
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                1.0
             ],
             "pair_sell_lots": [
-                2.5,
-                4.01,
-                1.5
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                1.0
             ],
             "single_lots": [
-                4.25,
-                6.25
+                0.25,
+                0.35,
+                0.45,
+                0.55,
+                0.65,
+                0.75,
+                0.85,
+                0.95,
+                1.5
             ],
             "second_entry_buy_tp_pips": 30.0,
             "second_entry_buy_sl_pips": 30.0,
@@ -749,20 +770,41 @@
             "sets_config": [
                 {
                     "pair_buy_lots": [
-                        2.5,
-                        4.01,
-                        1.5
+                        0.1,
+                        0.2,
+                        0.3,
+                        0.4,
+                        0.5,
+                        0.6,
+                        0.7,
+                        0.8,
+                        0.9,
+                        1.0
                     ],
                     "pair_sell_lots": [
-                        2.5,
-                        4.01,
-                        1.5
+                        0.1,
+                        0.2,
+                        0.3,
+                        0.4,
+                        0.5,
+                        0.6,
+                        0.7,
+                        0.8,
+                        0.9,
+                        1.0
                     ],
                     "single_lots": [
-                        4.25,
-                        6.25
+                        0.25,
+                        0.35,
+                        0.45,
+                        0.55,
+                        0.65,
+                        0.75,
+                        0.85,
+                        0.95,
+                        1.5
                     ],
-                    "max_positions": 6
+                    "max_positions": 27
                 }
             ]
         },
