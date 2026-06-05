@@ -803,156 +803,164 @@ class GridBounceStrategyEngine:
         # When direction="UP", this is part of pair (uses global TP/SL)
         tp_override_buy = self.second_entry_buy_tp_pips if direction == "DOWN" else None
         sl_override_buy = self.second_entry_buy_sl_pips if direction == "DOWN" else None
-        buy_ticket, buy_entry, buy_tp, buy_sl = await self._execute_market_order(
+        buy_results = await self._split_and_execute_orders(
             "buy", pair_buy_lot, "PairBuy", target_price,
             tp_pips_override=tp_override_buy,
             sl_pips_override=sl_override_buy
         )
-        if buy_ticket:
+        position_type_buy = 'single_custom' if direction == "DOWN" else 'pair'
+        buy_tickets = []
+        for (tkt, entry, tp, sl) in buy_results:
+            if not tkt:
+                continue
             open_count += 1
-            position_type_buy = 'single_custom' if direction == "DOWN" else 'pair'
             aligned_tp, aligned_sl, _ = await self._align_position_tp_sl(
-                buy_ticket,
-                "buy",
-                buy_tp,
-                buy_sl,
-                grid_level,
-                position_type_buy,
-                has_virtual_stops=False,
+                tkt, "buy", tp, sl, grid_level, position_type_buy, has_virtual_stops=False,
             )
-            grid_level.positions[buy_ticket] = {
+            grid_level.positions[tkt] = {
                 'leg': 'PairBuy',
                 'direction': 'buy',
-                'entry': buy_entry,
+                'entry': entry,
                 'tp': aligned_tp,
                 'sl': aligned_sl,
                 'lot': pair_buy_lot,
-                # When moving DOWN the PairBuy is the unpaired leg using custom buy TP/SL
                 'position_type': position_type_buy,
                 'has_virtual_stops': False
             }
-            self.state.ticket_map[buy_ticket] = grid_level.positions[buy_ticket]
-            self._init_touch_flags(buy_ticket)
+            self.state.ticket_map[tkt] = grid_level.positions[tkt]
+            self._init_touch_flags(tkt)
             self.activity_log.log_fire(
-                self.state.cycle_count, "PairBuy", buy_entry,
-                pair_buy_lot, aligned_tp,
-                aligned_sl, buy_ticket
+                self.state.cycle_count, "PairBuy", entry,
+                pair_buy_lot, aligned_tp, aligned_sl, tkt
             )
-        
+            buy_tickets.append(tkt)
+        if len(buy_tickets) > 1:
+            group_id = buy_tickets[0]
+            self.state.split_group_map[group_id] = list(buy_tickets)
+            for idd in buy_tickets:
+                if idd in self.state.ticket_map:
+                    self.state.ticket_map[idd]['split_group_id'] = group_id
+
         # Open Pair Sell
         # When direction="UP", this will be the unpaired sell (gets custom sell TP/SL)
         # When direction="DOWN", this is part of pair (uses global TP/SL)
         tp_override_sell = self.second_entry_sell_tp_pips if direction == "UP" else None
         sl_override_sell = self.second_entry_sell_sl_pips if direction == "UP" else None
-        sell_ticket, sell_entry, sell_tp, sell_sl = await self._execute_market_order(
+        sell_results = await self._split_and_execute_orders(
             "sell", pair_sell_lot, "PairSell", target_price,
             tp_pips_override=tp_override_sell,
             sl_pips_override=sl_override_sell
         )
-        if sell_ticket:
+        position_type_sell = 'single_custom' if direction == "UP" else 'pair'
+        sell_tickets = []
+        for (tkt, entry, tp, sl) in sell_results:
+            if not tkt:
+                continue
             open_count += 1
-            position_type_sell = 'single_custom' if direction == "UP" else 'pair'
             aligned_tp, aligned_sl, _ = await self._align_position_tp_sl(
-                sell_ticket,
-                "sell",
-                sell_tp,
-                sell_sl,
-                grid_level,
-                position_type_sell,
-                has_virtual_stops=False,
+                tkt, "sell", tp, sl, grid_level, position_type_sell, has_virtual_stops=False,
             )
-            grid_level.positions[sell_ticket] = {
+            grid_level.positions[tkt] = {
                 'leg': 'PairSell',
                 'direction': 'sell',
-                'entry': sell_entry,
+                'entry': entry,
                 'tp': aligned_tp,
                 'sl': aligned_sl,
                 'lot': pair_sell_lot,
-                # When moving UP the PairSell is the unpaired leg using custom sell TP/SL
                 'position_type': position_type_sell,
                 'has_virtual_stops': False
             }
-            self.state.ticket_map[sell_ticket] = grid_level.positions[sell_ticket]
-            self._init_touch_flags(sell_ticket)
+            self.state.ticket_map[tkt] = grid_level.positions[tkt]
+            self._init_touch_flags(tkt)
             self.activity_log.log_fire(
-                self.state.cycle_count, "PairSell", sell_entry,
-                pair_sell_lot, aligned_tp,
-                aligned_sl, sell_ticket
+                self.state.cycle_count, "PairSell", entry,
+                pair_sell_lot, aligned_tp, aligned_sl, tkt
             )
-        
+            sell_tickets.append(tkt)
+        if len(sell_tickets) > 1:
+            group_id = sell_tickets[0]
+            self.state.split_group_map[group_id] = list(sell_tickets)
+            for idd in sell_tickets:
+                if idd in self.state.ticket_map:
+                    self.state.ticket_map[idd]['split_group_id'] = group_id
+
         # Open Single (direction-dependent)
         if direction == "UP":
-            # Moving UP -> Single BUY (uses global TP/SL, paired sell already has custom sell TP/SL above)
-            single_ticket, single_entry, single_tp, single_sl = await self._execute_market_order(
+            # Moving UP -> Single BUY (uses global TP/SL)
+            single_results = await self._split_and_execute_orders(
                 "buy", single_lot, "SingleBuy", target_price
             )
-            if single_ticket:
+            single_tickets = []
+            for (tkt, entry, tp, sl) in single_results:
+                if not tkt:
+                    continue
                 open_count += 1
                 aligned_tp, aligned_sl, _ = await self._align_position_tp_sl(
-                    single_ticket,
-                    "buy",
-                    single_tp,
-                    single_sl,
-                    grid_level,
-                    "pair",
-                    has_virtual_stops=False,
+                    tkt, "buy", tp, sl, grid_level, "pair", has_virtual_stops=False,
                 )
-                # The explicit SingleBuy here is part of the pair triple and uses default TP/SL
-                grid_level.positions[single_ticket] = {
+                grid_level.positions[tkt] = {
                     'leg': 'SingleBuy',
                     'direction': 'buy',
-                    'entry': single_entry,
+                    'entry': entry,
                     'tp': aligned_tp,
                     'sl': aligned_sl,
                     'lot': single_lot,
                     'position_type': 'pair',
                     'has_virtual_stops': False
                 }
-                self.state.ticket_map[single_ticket] = grid_level.positions[single_ticket]
-                self._init_touch_flags(single_ticket)
+                self.state.ticket_map[tkt] = grid_level.positions[tkt]
+                self._init_touch_flags(tkt)
                 self.activity_log.log_fire(
-                    self.state.cycle_count, "SingleBuy", single_entry,
-                    single_lot, aligned_tp,
-                    aligned_sl, single_ticket
+                    self.state.cycle_count, "SingleBuy", entry,
+                    single_lot, aligned_tp, aligned_sl, tkt
                 )
+                single_tickets.append(tkt)
+            if len(single_tickets) > 1:
+                group_id = single_tickets[0]
+                self.state.split_group_map[group_id] = list(single_tickets)
+                for idd in single_tickets:
+                    if idd in self.state.ticket_map:
+                        self.state.ticket_map[idd]['split_group_id'] = group_id
 
         elif direction == "DOWN":
-            # Moving DOWN -> Single SELL (uses global TP/SL, paired buy already has custom buy TP/SL above)
-            single_ticket, single_entry, single_tp, single_sl = await self._execute_market_order(
+            # Moving DOWN -> Single SELL (uses global TP/SL)
+            single_results = await self._split_and_execute_orders(
                 "sell", single_lot, "SingleSell", target_price
             )
-            if single_ticket:
+            single_tickets = []
+            for (tkt, entry, tp, sl) in single_results:
+                if not tkt:
+                    continue
                 open_count += 1
                 aligned_tp, aligned_sl, _ = await self._align_position_tp_sl(
-                    single_ticket,
-                    "sell",
-                    single_tp,
-                    single_sl,
-                    grid_level,
-                    "pair",
-                    has_virtual_stops=False,
+                    tkt, "sell", tp, sl, grid_level, "pair", has_virtual_stops=False,
                 )
-                # The explicit SingleSell here is part of the pair triple and uses default TP/SL
-                grid_level.positions[single_ticket] = {
+                grid_level.positions[tkt] = {
                     'leg': 'SingleSell',
                     'direction': 'sell',
-                    'entry': single_entry,
+                    'entry': entry,
                     'tp': aligned_tp,
                     'sl': aligned_sl,
                     'lot': single_lot,
                     'position_type': 'pair',
                     'has_virtual_stops': False
                 }
-                self.state.ticket_map[single_ticket] = grid_level.positions[single_ticket]
-                self._init_touch_flags(single_ticket)
+                self.state.ticket_map[tkt] = grid_level.positions[tkt]
+                self._init_touch_flags(tkt)
                 self.activity_log.log_fire(
-                    self.state.cycle_count, "SingleSell", single_entry,
-                    single_lot, aligned_tp,
-                    aligned_sl, single_ticket
+                    self.state.cycle_count, "SingleSell", entry,
+                    single_lot, aligned_tp, aligned_sl, tkt
                 )
-        
-        self.state.total_positions += open_count
+                single_tickets.append(tkt)
+            if len(single_tickets) > 1:
+                group_id = single_tickets[0]
+                self.state.split_group_map[group_id] = list(single_tickets)
+                for idd in single_tickets:
+                    if idd in self.state.ticket_map:
+                        self.state.ticket_map[idd]['split_group_id'] = group_id
 
+        self.state.total_positions += open_count
+    
     def _get_level_reference(
         self, grid_level: GridLevel, direction: str, position_type: str
     ) -> Tuple[Optional[float], Optional[float]]:
