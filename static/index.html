@@ -1231,11 +1231,15 @@
             list.innerHTML = symbols.length
                 ? symbols.map(symbol => `
                     <label class="flex items-center gap-2 p-1 rounded hover:bg-slate-700/30 cursor-pointer">
-                        <input type="radio" name="copy-source" value="${symbol}" class="h-4 w-4 accent-indigo-500" ${symbol === defaultSource ? 'checked' : ''}>
+                        <input type="radio" name="copy-source" value="${symbol}" class="h-4 w-4 accent-indigo-500">
                         <span class="text-xs text-slate-200">${symbol}</span>
                     </label>
                 `).join('')
                 : '<p class="text-xs text-slate-400">No enabled assets available.</p>';
+            // Explicitly set .checked as a DOM property (not just HTML attribute) so
+            // querySelector(':checked') reliably finds it in goToCopyStep2
+            const defaultRadio = list.querySelector(`input[value="${defaultSource}"]`);
+            if (defaultRadio) defaultRadio.checked = true;
         }
 
         function populateCopyTargetList(sourceSymbol) {
