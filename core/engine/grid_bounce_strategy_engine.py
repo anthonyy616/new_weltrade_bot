@@ -1566,24 +1566,22 @@ class GridBounceStrategyEngine:
             return 0, 0.0, 0.0, 0.0
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            # Only retry on invalid stops error
             invalid_code = getattr(mt5, 'TRADE_RETCODE_INVALID_STOPS', 10016)
             if result.retcode == invalid_code:
-                # compute hardcoded stop level pips for this asset
                 stop_pips = MIN_STOP_PIPS_PER_ASSET.get(self.symbol, 10)
-                # Recalculate SL relative to exec_price
-                if direction == 'buy':
-                    new_sl = exec_price - float(stop_pips)
-                else:
-                    new_sl = exec_price + float(stop_pips)
-
-                # Apply same stops-level safety clamp used above
                 symbol_info = mt5.symbol_info(self.symbol)
+                point = symbol_info.point if symbol_info else 1.0
+                fresh_tick = mt5.symbol_info_tick(self.symbol)
+                retry_exec_price = (fresh_tick.ask if direction == 'buy' else fresh_tick.bid) if fresh_tick else exec_price
+                if direction == 'buy':
+                    new_sl = retry_exec_price - float(stop_pips) * point
+                else:
+                    new_sl = retry_exec_price + float(stop_pips) * point
+
                 if symbol_info and not skip_tp_sl:
-                    point = symbol_info.point
                     stops_level = max(symbol_info.trade_stops_level, 10)
                     min_dist = stops_level * point
-                    check_price = tick.bid if direction == 'buy' else tick.ask
+                    check_price = (fresh_tick.bid if direction == 'buy' else fresh_tick.ask) if fresh_tick else (tick.bid if direction == 'buy' else tick.ask)
                     if direction == 'buy':
                         if new_sl > check_price - min_dist:
                             new_sl = check_price - min_dist
@@ -1591,8 +1589,8 @@ class GridBounceStrategyEngine:
                         if new_sl < check_price + min_dist:
                             new_sl = check_price + min_dist
 
-                # Build retry request with updated SL and original TP
                 retry_req = dict(request)
+                retry_req['price'] = float(retry_exec_price)
                 if not skip_tp_sl:
                     retry_req['sl'] = float(new_sl)
                     retry_req['tp'] = float(tp)

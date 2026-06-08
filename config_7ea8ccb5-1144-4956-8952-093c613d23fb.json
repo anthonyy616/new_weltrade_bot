@@ -1,6 +1,6 @@
 {
     "global": {
-        "max_runtime_minutes": 180,
+        "max_runtime_minutes": 4320,
         "volatility_tolerance": "off"
     },
     "symbols": {
@@ -386,7 +386,7 @@
                 1.0
             ],
             "pair_sell_lots": [
-                0.2,
+                0.1,
                 0.2,
                 0.3,
                 0.4,
@@ -428,7 +428,7 @@
                         1.0
                     ],
                     "pair_sell_lots": [
-                        0.2,
+                        0.1,
                         0.2,
                         0.3,
                         0.4,
