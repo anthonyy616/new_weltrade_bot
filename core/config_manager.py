@@ -160,7 +160,7 @@ class ConfigManager:
             global_updates = dict(new_config["global"])
             if "volatility_tolerance" in global_updates:
                 val = global_updates.get("volatility_tolerance")
-                if val not in ("off", "1.25", "1.5"):
+                if val not in ("off", "1.5", "1.75", "2.0", "2.25", "2.5"):
                     # reject invalid value by removing it
                     global_updates.pop("volatility_tolerance", None)
             self.config["global"].update(global_updates)

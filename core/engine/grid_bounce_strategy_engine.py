@@ -130,6 +130,7 @@ class GridBounceStrategyEngine:
         self.activity_log = ActivityLogger(symbol, user_id, session_logger)
         self.repository: Optional[Repository] = None
         self._position_drop_detected = False
+        self._last_known_spread = 0.0
     
     # Config accessors
     @property
@@ -270,12 +271,14 @@ class GridBounceStrategyEngine:
     @property
     def volatility_tolerance_factor(self):
         val = self.config_manager.get_global_config().get('volatility_tolerance', 'off')
-        if val == 'off' or val is None:
-            return None
-        try:
-            return float(val)
-        except Exception:
-            return None
+        mapping = {
+            "1.5": 1.5,
+            "1.75": 1.75,
+            "2.0": 2.0,
+            "2.25": 2.25,
+            "2.5": 2.5
+        }
+        return mapping.get(val, None)
 
     def advance_to_next_set(self):
         """
@@ -441,11 +444,14 @@ class GridBounceStrategyEngine:
         """
         Called by orchestrator on every tick
         """
+        ask = tick_data.get('ask', 0.0)
+        bid = tick_data.get('bid', 0.0)
+        raw_spread = ask - bid
+        if raw_spread > 0:
+            self._last_known_spread = raw_spread
+
         if not self.running or self.state.phase == "IDLE":
             return
-        
-        ask = tick_data.get('ask', 0)
-        bid = tick_data.get('bid', 0)
         
         if ask <= 0 or bid <= 0:
             return
@@ -455,7 +461,7 @@ class GridBounceStrategyEngine:
             await self._check_virtual_stops(ask, bid)
 
             # 1. Volatility/slippage tolerant reset check (new)
-            # await self._check_volatility_slippage(ask, bid)
+            await self._check_volatility_slippage(ask, bid)
 
             # 2. Update touch flags FIRST (PRESERVED)
             self._update_touch_flags(ask, bid)
@@ -780,8 +786,30 @@ class GridBounceStrategyEngine:
             ask, bid: Current prices
             direction: "UP" or "DOWN" (determines single trade direction)
         """
+        # Pre-entry Volatility Check
+        factor = self.volatility_tolerance_factor
+        if factor is not None:
+            mid = (ask + bid) / 2
+            if self.state.grid_level_2 and self.state.grid_level_2.active:
+                reference_level_price = self._get_nearest_level_price(mid)
+            else:
+                reference_level_price = self.state.grid_level_1.price if self.state.grid_level_1 else self.state.center_price
+            
+            adjusted_distance = self._adjusted_distance(mid, reference_level_price)
+            threshold = float(self.grid_distance) * float(factor)
+            
+            if adjusted_distance >= threshold:
+                self.activity_log.log_info(
+                    f"VOLATILITY ABORT (pre-entry): Adjusted distance {adjusted_distance:.5f} from level {reference_level_price:.5f} "
+                    f"exceeds threshold {threshold:.5f}. Aborting triple open and triggering nuclear reset."
+                )
+                self._position_drop_detected = False
+                await self._nuclear_reset_and_restart("VOLATILITY_RESET", self.state.realized_pnl)
+                return
+
         target_price = grid_level.price
         open_count = 0
+        single_results = []
         
         # Stage index: 0=center pair, 1=first adaptive pair, 2=second adaptive pair...
         pair_stage = (self.state.position_counter // 3) + 1
@@ -958,6 +986,35 @@ class GridBounceStrategyEngine:
                 for idd in single_tickets:
                     if idd in self.state.ticket_map:
                         self.state.ticket_map[idd]['split_group_id'] = group_id
+
+        # Post-fill Volatility Check
+        factor = self.volatility_tolerance_factor
+        if factor is not None:
+            # Collect all fill prices from the results of all three legs
+            fill_prices = []
+            for r_list in (buy_results, sell_results, single_results):
+                for (tkt, entry, tp, sl) in r_list:
+                    if tkt != 0:
+                        fill_prices.append(entry)
+            
+            # Determine the reference level the same way as Layer 1
+            mid = (ask + bid) / 2
+            if self.state.grid_level_2 and self.state.grid_level_2.active:
+                reference_level_price = self._get_nearest_level_price(mid)
+            else:
+                reference_level_price = self.state.grid_level_1.price if self.state.grid_level_1 else self.state.center_price
+            
+            threshold = float(self.grid_distance) * float(factor)
+            for fill_price in fill_prices:
+                adjusted_distance = self._adjusted_distance(fill_price, reference_level_price)
+                if adjusted_distance >= threshold:
+                    self.activity_log.log_info(
+                        f"VOLATILITY ABORT (post-fill): Fill price {fill_price:.5f} adjusted distance {adjusted_distance:.5f} "
+                        f"from level {reference_level_price:.5f} exceeds threshold {threshold:.5f}. Triggering nuclear reset."
+                    )
+                    self._position_drop_detected = False
+                    await self._nuclear_reset_and_restart("VOLATILITY_RESET", self.state.realized_pnl)
+                    return
 
         self.state.total_positions += open_count
     
@@ -1663,30 +1720,37 @@ class GridBounceStrategyEngine:
 
         return results
 
+    def _get_nearest_level_price(self, mid: float) -> float:
+        if self.state.grid_level_2 and self.state.grid_level_2.active:
+            p1 = self.state.grid_level_1.price if self.state.grid_level_1 else self.state.center_price
+            p2 = self.state.grid_level_2.price
+            return p1 if abs(mid - p1) < abs(mid - p2) else p2
+        elif self.state.grid_level_1:
+            return self.state.grid_level_1.price
+        return self.state.center_price
+
+    def _adjusted_distance(self, price_a: float, price_b: float) -> float:
+        return max(0.0, abs(price_a - price_b) - (self._last_known_spread / 2))
+
     async def _check_volatility_slippage(self, ask: float, bid: float):
-        """
-        Check for excessive mid-price deviation from center when TWO_LEVELS active and
-        trigger VOLATILITY reset if threshold exceeded.
-        """
         factor = self.volatility_tolerance_factor
         if factor is None:
             return
         if self.state.phase != "TWO_LEVELS":
             return
-        if not self.state.center_price or self.state.center_price == 0:
-            return
 
         mid = (ask + bid) / 2
-        distance = abs(mid - self.state.center_price)
+        nearest_level_price = self._get_nearest_level_price(mid)
+        adjusted_distance = self._adjusted_distance(mid, nearest_level_price)
         threshold = float(self.grid_distance) * float(factor)
-        if distance >= threshold:
+
+        if adjusted_distance >= threshold:
             self.activity_log.log_info(
-                f"VOLATILITY RESET: Price distance {distance:.5f} from center {self.state.center_price:.5f} exceeds {factor}x grid distance threshold {threshold:.5f}. Triggering nuclear reset."
+                f"VOLATILITY RESET: Adjusted distance {adjusted_distance:.5f} from nearest level {nearest_level_price:.5f} "
+                f"(spread deduction: {self._last_known_spread / 2:.5f}) exceeds {factor}x threshold {threshold:.5f}. Triggering nuclear reset."
             )
-            # prevent double reset
             self._position_drop_detected = False
             await self._nuclear_reset_and_restart("VOLATILITY_RESET", self.state.realized_pnl)
-            return
 
     async def _add_tp_sl_to_position(self, ticket: int, direction: str, entry_price: float) -> Tuple[bool, float, float]:
         """

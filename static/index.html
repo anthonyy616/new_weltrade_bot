@@ -67,18 +67,22 @@
     </div>
 
     <!-- Copy Lots Modal (hidden by default) -->
-    <div id="copy-lots-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div id="copy-lots-modal"
+        class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-slate-800 rounded-lg border border-slate-700 w-full max-w-sm shadow-2xl">
             <div class="p-4 border-b border-slate-700 flex justify-between items-center">
                 <h3 class="text-sm font-bold text-white">Copy Lot Setup</h3>
-                <button type="button" onclick="closeCopyLotsModal()" class="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
+                <button type="button" onclick="closeCopyLotsModal()"
+                    class="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
             </div>
 
             <!-- Step 1: Source -->
             <div id="copy-step-1" class="p-4 space-y-3">
                 <p class="text-xs text-slate-400">Step 1 — Select the asset to copy <strong>from</strong>:</p>
                 <div id="copy-source-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
-                <button type="button" onclick="goToCopyStep2()" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium">Next →</button>
+                <button type="button" onclick="goToCopyStep2()"
+                    class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium">Next
+                    →</button>
             </div>
 
             <!-- Step 2: Targets -->
@@ -86,8 +90,11 @@
                 <p class="text-xs text-slate-400">Step 2 — Select assets to copy <strong>to</strong>:</p>
                 <div id="copy-target-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
                 <div class="flex gap-2">
-                    <button type="button" onclick="goBackToCopyStep1()" class="flex-1 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-medium">← Back</button>
-                    <button type="button" onclick="executeLotCopy()" class="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium">Copy</button>
+                    <button type="button" onclick="goBackToCopyStep1()"
+                        class="flex-1 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-medium">←
+                        Back</button>
+                    <button type="button" onclick="executeLotCopy()"
+                        class="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium">Copy</button>
                 </div>
             </div>
 
@@ -95,11 +102,13 @@
             <div id="copy-success" class="p-4 text-center hidden">
                 <div class="text-green-400 text-2xl mb-2">✓</div>
                 <p class="text-xs text-slate-300">Lot setup copied and saved to the backend.</p>
-                <button type="button" onclick="closeCopyLotsModal()" class="mt-3 w-full py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs">Done</button>
+                <button type="button" onclick="closeCopyLotsModal()"
+                    class="mt-3 w-full py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs">Done</button>
             </div>
             <!-- Differing-sets prompt -->
             <div id="copy-diff-prompt" class="p-4 space-y-3 hidden">
-                <p id="copy-diff-msg" class="text-xs text-slate-300">The source has a different number of sets than some targets.</p>
+                <p id="copy-diff-msg" class="text-xs text-slate-300">The source has a different number of sets than some
+                    targets.</p>
                 <div class="text-xs text-slate-400">Choose how to handle targets with differing sets:</div>
                 <div class="space-y-2">
                     <label class="flex items-center space-x-2">
@@ -116,8 +125,10 @@
                     </label>
                 </div>
                 <div class="flex gap-2">
-                    <button type="button" onclick="confirmCopyChoice()" class="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium">Confirm</button>
-                    <button type="button" onclick="cancelCopyChoice()" class="flex-1 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-medium">Cancel</button>
+                    <button type="button" onclick="confirmCopyChoice()"
+                        class="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium">Confirm</button>
+                    <button type="button" onclick="cancelCopyChoice()"
+                        class="flex-1 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-medium">Cancel</button>
                 </div>
             </div>
         </div>
@@ -290,7 +301,11 @@
                         <div class="mt-2">
                             <button type="button" id="copy-lot-btn" onclick="openCopyLotsModal()"
                                 class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium flex items-center justify-center gap-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6M9 16h6M9 8h6M3 6h.01M3 12h.01M3 18h.01M21 6h.01M21 12h.01M21 18h.01"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1"
+                                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M9 12h6M9 16h6M9 8h6M3 6h.01M3 12h.01M3 18h.01M21 6h.01M21 12h.01M21 18h.01" />
+                                </svg>
                                 Copy Lot Setup
                             </button>
                         </div>
@@ -321,21 +336,29 @@
                             <div>
                                 <label class="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Volatility
                                     Tolerance</label>
-                                <select id="volatility_tolerance" onchange="scheduleAutoSave()" class="w-full p-1.5 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <select id="volatility_tolerance" onchange="scheduleAutoSave()"
+                                    class="w-full p-1.5 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500">
                                     <option value="off">Off</option>
-                                    <option value="1.25">1.25x</option>
-                                    <option value="1.5">1.5x</option>
+                                    <option value="1.5"><strong>1.5x</strong> / 50% slip</option>
+                                    <option value="1.75"><strong>1.75x</strong> / 75% slip</option>
+                                    <option value="2.0"><strong>2x</strong> / 100% slip</option>
+                                    <option value="2.25"><strong>2.25x</strong> / 125% slip</option>
+                                    <option value="2.5"><strong>2.5x</strong> / 150% slip</option>
                                 </select>
                             </div>
 
                             <!-- Auto-save toggle -->
-                            <div class="col-span-2 flex items-center justify-between mt-1 p-1.5 bg-slate-800 rounded border border-slate-600">
+                            <div
+                                class="col-span-2 flex items-center justify-between mt-1 p-1.5 bg-slate-800 rounded border border-slate-600">
                                 <label class="text-[10px] text-slate-400 leading-tight">
                                     Auto-save config<br>
                                     <span class="text-[9px] text-slate-500">Saves on field change</span>
                                 </label>
-                                <button type="button" id="autosave-toggle" onclick="toggleAutoSave()" class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors bg-slate-600" role="switch" aria-checked="false">
-                                    <span id="autosave-knob" class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform translate-x-1"></span>
+                                <button type="button" id="autosave-toggle" onclick="toggleAutoSave()"
+                                    class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors bg-slate-600"
+                                    role="switch" aria-checked="false">
+                                    <span id="autosave-knob"
+                                        class="inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform translate-x-1"></span>
                                 </button>
                             </div>
                             <div class="col-span-2 text-right">
@@ -594,7 +617,7 @@
                             const pbEl = document.getElementById(`pairbuy_${safeId}${suffix}_${pairStageIdx + 1}`);
                             const psEl = document.getElementById(`pairsell_${safeId}${suffix}_${pairStageIdx + 1}`);
                             const singleEl = document.getElementById(`single_${safeId}${suffix}_${g + 1}`);
-                            const vals = [ (pbEl ? parseFloat(pbEl.value)||0 : 0), (psEl ? parseFloat(psEl.value)||0 : 0), (singleEl ? parseFloat(singleEl.value)||0 : 0) ];
+                            const vals = [(pbEl ? parseFloat(pbEl.value) || 0 : 0), (psEl ? parseFloat(psEl.value) || 0 : 0), (singleEl ? parseFloat(singleEl.value) || 0 : 0)];
                             const maxIdx = vals.indexOf(Math.max(...vals));
                             const fieldEl = maxIdx === 0 ? pbEl : (maxIdx === 1 ? psEl : singleEl);
                             if (fieldEl) {
@@ -770,7 +793,7 @@
             if (global.max_runtime_minutes !== undefined) {
                 document.getElementById('max_runtime_minutes').value = global.max_runtime_minutes;
             }
-            if (global.volatility_tolerance !== undefined && ["off","1.25","1.5"].includes(global.volatility_tolerance)) {
+            if (global.volatility_tolerance !== undefined && ["off", "1.5", "1.75", "2.0", "2.25", "2.5"].includes(global.volatility_tolerance)) {
                 document.getElementById('volatility_tolerance').value = global.volatility_tolerance;
             } else {
                 document.getElementById('volatility_tolerance').value = 'off';
@@ -793,11 +816,11 @@
             for (const symbol of checkedSymbols) {
                 const symCfg = currentConfig?.symbols?.[symbol] || {};
                 const safeId = symbol.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-                
+
                 // Handle both new multi-set format and legacy single-set format
                 const numSets = parseInt(symCfg.sets || 1);
                 const setsConfigArray = symCfg.sets_config || [];
-                
+
                 // Build initial lot data for each set
                 const setsData = [];
                 for (let setIdx = 0; setIdx < numSets; setIdx++) {
@@ -805,19 +828,19 @@
                     const effectiveMaxPos = Math.max(3, Math.min(60, parseInt(setConfig.max_positions || symCfg.max_positions || 3)));
                     const maxPosInput = Math.max(1, Math.min(20, Math.round(effectiveMaxPos / 3)));
                     const groups = maxPosInput;
-                    
+
                     const rawPairBuy = Array.isArray(setConfig.pair_buy_lots) ? setConfig.pair_buy_lots : (Array.isArray(symCfg.pair_buy_lots) ? symCfg.pair_buy_lots : [0.01]);
                     const rawPairSell = Array.isArray(setConfig.pair_sell_lots) ? setConfig.pair_sell_lots : (Array.isArray(symCfg.pair_sell_lots) ? symCfg.pair_sell_lots : [0.01]);
                     const rawSingle = Array.isArray(setConfig.single_lots) ? setConfig.single_lots : (Array.isArray(symCfg.single_lots) ? symCfg.single_lots : [0.01]);
-                    
+
                     const pairBuy = [...rawPairBuy];
                     const pairSell = [...rawPairSell];
                     const single = [...rawSingle];
-                    
+
                     while (pairBuy.length < groups + 1) pairBuy.push(pairBuy[pairBuy.length - 1] ?? 0.01);
                     while (pairSell.length < groups + 1) pairSell.push(pairSell[pairSell.length - 1] ?? 0.01);
                     while (single.length < groups) single.push(single[single.length - 1] ?? 0.01);
-                    
+
                     setsData.push({
                         pair_buy_lots: pairBuy.slice(0, groups + 1),
                         pair_sell_lots: pairSell.slice(0, groups + 1),
@@ -825,7 +848,7 @@
                         max_positions: effectiveMaxPos
                     });
                 }
-                
+
                 lotInitialBySafeId[safeId] = {
                     sets_data: setsData,
                     num_sets: numSets,
@@ -835,11 +858,11 @@
                     second_entry_sell_tp_pips: symCfg.second_entry_sell_tp_pips || 150,
                     second_entry_sell_sl_pips: symCfg.second_entry_sell_sl_pips || 200,
                 };
-                
+
                 // For renderAssetSettingsPanel, pass first set's max_positions
                 const firstSetMaxPos = setsData.length > 0 ? setsData[0].max_positions : 3;
                 const maxPosInput = Math.max(1, Math.min(20, Math.round(firstSetMaxPos / 3)));
-                
+
                 safeIds.push({ symbol, safeId });
                 html += renderAssetSettingsPanel(symbol, safeId, symCfg, maxPosInput);
             }
@@ -863,7 +886,7 @@
                 const value = i + 1;
                 return `<option value="${value}" ${selectedMaxPosInput === value ? 'selected' : ''}>${value}</option>`;
             }).join('');
-            
+
             // Sets configuration
             const numSets = parseInt(cfg.sets || 1);
             const setOptions = Array.from({ length: 10 }, (_, i) => {
@@ -954,12 +977,12 @@
                 pair_sell_lots: [0.01, 0.01],
                 single_lots: [0.01],
             };
-            
+
             const configContainer = document.getElementById(`sets_config_${safeId}`);
             if (!configContainer) return;
-            
+
             let html = '';
-            
+
             // Render each set's configuration
             for (let setIdx = 0; setIdx < numSets; setIdx++) {
                 const setNum = setIdx + 1;
@@ -967,19 +990,19 @@
                 const fieldSuffix = `_set_${setIdx}`;
                 const setData = lotInitialBySafeId[safeId]?.sets_data?.[setIdx] || primarySetData;
                 const fallbackMaxPosInput = Math.max(1, Math.min(20, Math.round((setData.max_positions || 3) / 3)));
-                
+
                 // Get max positions for this set (from field if exists, else 1)
                 const maxPosEl = document.getElementById(`maxpos_${safeId}${fieldSuffix}`);
                 const rawMaxPosInput = parseInt(maxPosEl?.value) || fallbackMaxPosInput;
                 const maxPosInput = Math.max(1, Math.min(20, rawMaxPosInput));
                 const effectiveMaxPos = maxPosInput * 3;
                 const groups = Math.max(1, Math.floor(effectiveMaxPos / 3));
-                
+
                 const maxPosOptions = Array.from({ length: 20 }, (_, i) => {
                     const value = i + 1;
                     return `<option value="${value}" ${maxPosInput === value ? 'selected' : ''}>${value}</option>`;
                 }).join('');
-                
+
                 // Build lot inputs for this set
                 let lotHtml = `
                 <div class="p-3 bg-slate-100 dark:bg-slate-900/30 rounded border border-slate-200 dark:border-slate-700">
@@ -1004,23 +1027,23 @@
                     </div>
                 </div>
                 `;
-                
+
                 html += lotHtml;
-                
+
                 // Now populate the lot groups for this set
                 setTimeout(() => renderSetLotGroups(symbol, safeId, setIdx, maxPosInput, groups), 0);
             }
-            
+
             configContainer.innerHTML = html;
         }
-        
+
         // Render lot groups for a specific set
         function renderSetLotGroups(symbol, safeId, setIdx, maxPosInput, groups) {
             const fieldSuffix = `_set_${setIdx}`;
             const container = document.getElementById(`lot_groups_${safeId}${fieldSuffix}`);
             if (!container) return;
             const isPrimarySet = setIdx === 0;
-            
+
             // Get initial values from sets_data for this specific set
             const primarySetData = lotInitialBySafeId[safeId]?.sets_data?.[0] || {
                 pair_buy_lots: [0.01, 0.01],
@@ -1853,7 +1876,8 @@
     </script>
 
     <!-- Volume limit warning popup -->
-    <div id="volume-warning-popup" class="fixed right-4 bottom-4 bg-red-600 text-white p-3 rounded shadow-lg hidden z-50 max-w-sm">
+    <div id="volume-warning-popup"
+        class="fixed right-4 bottom-4 bg-red-600 text-white p-3 rounded shadow-lg hidden z-50 max-w-sm">
         <div class="flex items-start gap-3">
             <div class="flex-1">
                 <div class="text-sm">Volume limit exceeded for <span class="font-semibold vw-symbol"></span></div>
