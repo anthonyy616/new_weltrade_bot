@@ -1,7 +1,7 @@
 {
     "global": {
         "max_runtime_minutes": 660,
-        "volatility_tolerance": "off"
+        "volatility_tolerance": "1.5"
     },
     "symbols": {
         "FX Vol 20": {

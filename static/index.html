@@ -635,7 +635,7 @@
                 _clearFieldWarningsForSafeId(safeId);
                 _hideVolumeWarning();
             } catch (e) {
-                console.error('simulateVolumeAccumulation error', e);
+                // no need for this, just supress silently.
             }
         }
 
@@ -670,8 +670,9 @@
             const token = data.session?.access_token;
 
             if (!token) {
-                console.warn("Session expired. Logging out.");
                 setLoggedOutState();
+                document.getElementById('login-error').textContent = "Your session has expired. Please refresh the page and log in again.";
+                document.getElementById('login-error').classList.remove('hidden');
                 return null;
             }
 
@@ -690,16 +691,16 @@
                 const res = await fetch(BASE_URL + endpoint, opts);
 
                 if (res.status === 401) {
-                    console.error("401 Unauthorized - Force Logout");
                     supabaseClient.auth.signOut();
                     setLoggedOutState();
+                    document.getElementById('login-error').textContent = "Your session has expired. Please refresh the page and log in again.";
+                    document.getElementById('login-error').classList.remove('hidden');
                     return null;
                 }
 
                 return res.json();
             } catch (e) {
-                console.error("API Connection Error:", e);
-                // Don't log out on network error, just return null
+                log("Cannot reach the bot server. Please check your connection.");
                 return null;
             }
         }
@@ -711,7 +712,7 @@
                 const env = await res.json();
 
                 if (!env.SUPABASE_URL || !env.SUPABASE_KEY) {
-                    document.getElementById('login-error').textContent = "Server Error: Missing .env keys";
+                    document.getElementById('login-error').textContent = "The server is not configured correctly. Please contact your administrator.";
                     document.getElementById('login-error').classList.remove('hidden');
                     return;
                 }
@@ -733,8 +734,12 @@
                     if (session) setLoggedInState(session);
                     else setLoggedOutState();
                 });
-            } catch (e) { console.error("Init Error", e); }
+            } catch (e) {
+                document.getElementById('login-error').textContent = "Please refresh the browser page to login successfully.";
+                document.getElementById('login-error').classList.remove('hidden');
+            }
         }
+
 
         async function handleSupabaseLogin(e) {
             e.preventDefault();
@@ -758,8 +763,12 @@
                 if (loginError) throw loginError;
 
             } catch (e) {
-                console.error("Auth Error", e);
-                errBox.textContent = e.message || "Authentication failed.";
+                const msg = (e && e.message) ? e.message.toLowerCase() : "";
+                if (msg.includes("invalid") || msg.includes("credentials") || msg.includes("password") || msg.includes("not found")) {
+                    errBox.textContent = "Incorrect email or password. Please try again.";
+                } else {
+                    errBox.textContent = "Login failed. Please refresh the page and try again.";
+                }
                 errBox.classList.remove('hidden');
                 btn.innerHTML = 'Sign In / Register';
             }
@@ -1756,7 +1765,7 @@
                 if (!res.ok) return null;
                 return await res.text();
             } catch (e) {
-                console.error("Text Fetch Error:", e);
+                log("Could not load the log file. Please try again.");
                 return null;
             }
         }
