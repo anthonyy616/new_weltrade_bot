@@ -47,6 +47,14 @@ class GridLevel:
     """Represents a single grid level with its positions"""
     price: float
     active: bool = False
+    reference_buy_tp: Optional[float] = None
+    reference_buy_sl: Optional[float] = None
+    reference_sell_tp: Optional[float] = None
+    reference_sell_sl: Optional[float] = None
+    reference_custom_buy_tp: Optional[float] = None
+    reference_custom_buy_sl: Optional[float] = None
+    reference_custom_sell_tp: Optional[float] = None
+    reference_custom_sell_sl: Optional[float] = None
     
     # Position tracking (ticket -> {leg, direction, entry, tp, sl, lot})
     positions: Dict[int, dict] = field(default_factory=dict)
@@ -927,8 +935,8 @@ class GridBounceStrategyEngine:
         upper_anchor = max(level1, level2) + (sl_pips * point)
         lower_anchor = min(level1, level2) - (sl_pips * point)
         """
-        level_1 = self.state.grid_level_1.price
-        level_2 = self.state.grid_level_2.price
+        level_1 = self.state.grid_level_1.price if self.state.grid_level_1 else self.state.center_price
+        level_2 = self.state.grid_level_2.price if self.state.grid_level_2 else self.state.center_price
         upper = max(level_1, level_2)
         lower = min(level_1, level_2)
         sl_dist = float(self.sl_pips)
@@ -976,9 +984,9 @@ class GridBounceStrategyEngine:
                         level.positions[ticket]['sl'] = new_sl
             else:
                 error = result.comment if result else mt5.last_error()
-                self.activity_log.log_error(
-                    f"Anchor alignment failed for ticket {ticket} ({direction}): {error}"
-                )
+                #self.activity_log.log_error(
+                    #f"Anchor alignment failed for ticket {ticket} ({direction}): {error}"
+                #)
 
     #TP/SL detection helpers (Same as old logic)
 
@@ -1660,6 +1668,52 @@ class GridBounceStrategyEngine:
             )
             return False, float(aligned_tp), float(aligned_sl)
         return False, float(tp), float(sl)
+
+    async def _align_position_tp_sl(
+        self,
+        ticket: int,
+        direction: str,
+        tp: float,
+        sl: float,
+        grid_level: Optional[GridLevel],
+        position_type: str,
+        has_virtual_stops: bool = False,
+    ) -> Tuple[float, float, bool]:
+        """
+        Keep the in-memory level state aligned with the TP/SL values used for a position.
+        When the broker rejects stops, the same values are stored as virtual stops so the
+        manual stop checker can close the position later.
+        """
+        if grid_level is None:
+            return float(tp), float(sl), False
+
+        info = grid_level.positions.get(ticket)
+        if not info:
+            return float(tp), float(sl), False
+
+        tp = float(tp)
+        sl = float(sl)
+        info["tp"] = tp
+        info["sl"] = sl
+        info["has_virtual_stops"] = has_virtual_stops
+        self.state.ticket_map[ticket] = info
+
+        if position_type == "single_custom":
+            if direction == "buy":
+                grid_level.reference_custom_buy_tp = tp
+                grid_level.reference_custom_buy_sl = sl
+            else:
+                grid_level.reference_custom_sell_tp = tp
+                grid_level.reference_custom_sell_sl = sl
+        else:
+            if direction == "buy":
+                grid_level.reference_buy_tp = tp
+                grid_level.reference_buy_sl = sl
+            else:
+                grid_level.reference_sell_tp = tp
+                grid_level.reference_sell_sl = sl
+
+        return tp, sl, True
 
     async def _check_virtual_stops(self, ask: float, bid: float):
         """Close positions manually when virtual TP/SL thresholds are hit."""

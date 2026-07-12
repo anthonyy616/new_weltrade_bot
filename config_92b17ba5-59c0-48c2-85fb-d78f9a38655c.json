@@ -1,14 +1,14 @@
 {
     "global": {
         "max_runtime_minutes": 120,
-        "volatility_tolerance": "1.25"
+        "volatility_tolerance": "off"
     },
     "symbols": {
         "FX Vol 20": {
             "enabled": true,
             "grid_distance": 25.0,
             "tp_pips": 30.0,
-            "sl_pips": 55.0,
+            "sl_pips": 30.0,
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.02,
@@ -98,7 +98,7 @@
             "enabled": true,
             "grid_distance": 80.0,
             "tp_pips": 85.0,
-            "sl_pips": 155.0,
+            "sl_pips": 85.0,
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
@@ -188,7 +188,7 @@
             "enabled": true,
             "grid_distance": 30.0,
             "tp_pips": 35.0,
-            "sl_pips": 55.0,
+            "sl_pips": 35.0,
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
@@ -278,7 +278,7 @@
             "enabled": true,
             "grid_distance": 50.0,
             "tp_pips": 55.0,
-            "sl_pips": 95.0,
+            "sl_pips": 55.0,
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
@@ -368,7 +368,7 @@
             "enabled": true,
             "grid_distance": 50.0,
             "tp_pips": 55.0,
-            "sl_pips": 95.0,
+            "sl_pips": 55.0,
             "pair_buy_lot": 0.01,
             "pair_sell_lot": 0.01,
             "single_lot": 0.01,
@@ -386,7 +386,7 @@
                 1.0
             ],
             "pair_sell_lots": [
-                0.2,
+                0.1,
                 0.2,
                 0.3,
                 0.4,
@@ -428,7 +428,7 @@
                         1.0
                     ],
                     "pair_sell_lots": [
-                        0.2,
+                        0.1,
                         0.2,
                         0.3,
                         0.4,
@@ -455,7 +455,7 @@
             ]
         },
         "SFX Vol 20": {
-            "enabled": true,
+            "enabled": false,
             "grid_distance": 15.0,
             "tp_pips": 20.0,
             "sl_pips": 35.0,
@@ -551,7 +551,7 @@
             ]
         },
         "SFX Vol 40": {
-            "enabled": true,
+            "enabled": false,
             "grid_distance": 40.0,
             "tp_pips": 45.0,
             "sl_pips": 95.0,
@@ -719,7 +719,7 @@
             ]
         },
         "SFX Vol 99": {
-            "enabled": true,
+            "enabled": false,
             "grid_distance": 5.0,
             "tp_pips": 10.0,
             "sl_pips": 30.0,
