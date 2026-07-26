@@ -70,26 +70,32 @@ class GridLevel:
 
 
 @dataclass
+class SetState:
+    set_index: int
+    phase: str = "IDLE"
+    grid_level_1: Optional[GridLevel] = None
+    grid_level_2: Optional[GridLevel] = None
+    position_counter: int = 0
+    last_move_direction: str = ""
+    is_final_group_reached: bool = False
+
+
+@dataclass
 class StrategyState:
     """Complete state for Grid Bounce Strategy"""
     phase: str = "IDLE"  # IDLE, SINGLE_LEVEL, TWO_LEVELS, RESETTING
     
     # Grid configuration
     center_price: float = 0.0  # Initial startup price
-    grid_level_1: Optional[GridLevel] = None  # First level (always center at startup)
-    grid_level_2: Optional[GridLevel] = None  # Second level (activated on first move)
     
-    # Position management
-    position_counter: int = 0  # Counts toward max_positions (excludes initial 2)
     total_positions: int = 0   # Total open positions (for tracking)
-    current_set_index: int = 0  # Current active set (0-based index into sets_config)
-    
-    # Movement tracking
-    last_move_direction: str = ""  # "UP" or "DOWN"
     
     # Cycle tracking
     cycle_count: int = 0
     realized_pnl: float = 0.0
+
+    # Per-set state
+    sets: List[SetState] = field(default_factory=list)
     
     # Ticket tracking (global across all levels)
     ticket_map: Dict[int, dict] = field(default_factory=dict)
@@ -126,8 +132,9 @@ class GridBounceStrategyEngine:
         self.execution_lock = asyncio.Lock()
         self.activity_log = ActivityLogger(symbol, user_id, session_logger)
         self.repository: Optional[Repository] = None
-        self._position_drop_detected = False
+        self._position_drop_detected_set_indices: set[int] = set()
         self._last_known_spread = 0.0
+        self.orphan_tickets: List[int] = []
     
     # Config accessors
     @property
@@ -146,17 +153,104 @@ class GridBounceStrategyEngine:
     @property
     def current_set_config(self) -> Dict[str, Any]:
         """Get configuration for current active set"""
-        set_idx = max(0, min(self.state.current_set_index, self.num_sets - 1))
+        return self._get_set_config(0)
+
+    def _get_set_config(self, set_index: int) -> Dict[str, Any]:
         sets_config = self.config.get('sets_config', [])
-        if not sets_config:
-            # Fallback to single-set config (backward compat)
-            return {
-                'pair_buy_lots': self.config.get('pair_buy_lots', [0.01, 0.01]),
-                'pair_sell_lots': self.config.get('pair_sell_lots', [0.01, 0.01]),
-                'single_lots': self.config.get('single_lots', [0.01]),
-                'max_positions': self.config.get('max_positions', 3),
-            }
-        return sets_config[set_idx] if set_idx < len(sets_config) else sets_config[-1]
+        if sets_config:
+            idx = max(0, min(set_index, len(sets_config) - 1))
+            return sets_config[idx]
+
+        return {
+            'center_buy_lot': self.config.get('center_buy_lot', self.config.get('pair_buy_lot', 0.01)),
+            'center_sell_lot': self.config.get('center_sell_lot', self.config.get('pair_sell_lot', 0.01)),
+            'pair_buy_lots': self.config.get('pair_buy_lots', [0.01]),
+            'pair_sell_lots': self.config.get('pair_sell_lots', [0.01]),
+            'single_lots': self.config.get('single_lots', [0.01]),
+            'max_positions': self.config.get('max_positions', 3),
+        }
+
+    def _ensure_set_state(self, set_index: int) -> SetState:
+        while len(self.state.sets) <= set_index:
+            self.state.sets.append(SetState(set_index=len(self.state.sets)))
+        set_state = self.state.sets[set_index]
+        if set_state.set_index != set_index:
+            set_state.set_index = set_index
+        return set_state
+
+    def _group_count_for_set(self, set_index: int) -> int:
+        return max(1, int(self._get_set_config(set_index).get('max_positions', 3)) // 3)
+
+    def _center_buy_lot_for_set(self, set_index: int) -> float:
+        cfg = self._get_set_config(set_index)
+        value = cfg.get('center_buy_lot', cfg.get('pair_buy_lot', 0.01))
+        return max(0.01, float(value))
+
+    def _center_sell_lot_for_set(self, set_index: int) -> float:
+        cfg = self._get_set_config(set_index)
+        value = cfg.get('center_sell_lot', cfg.get('pair_sell_lot', 0.01))
+        return max(0.01, float(value))
+
+    def _pair_buy_lots_for_set(self, set_index: int) -> List[float]:
+        cfg = self._get_set_config(set_index)
+        lots = cfg.get('pair_buy_lots')
+        if isinstance(lots, list) and lots:
+            parsed = [max(0.01, float(x)) for x in lots]
+        else:
+            parsed = [max(0.01, float(cfg.get('pair_buy_lot', 0.01)))]
+        need = self._group_count_for_set(set_index)
+        if len(parsed) < need:
+            parsed += [parsed[-1]] * (need - len(parsed))
+        return parsed[:need]
+
+    def _pair_sell_lots_for_set(self, set_index: int) -> List[float]:
+        cfg = self._get_set_config(set_index)
+        lots = cfg.get('pair_sell_lots')
+        if isinstance(lots, list) and lots:
+            parsed = [max(0.01, float(x)) for x in lots]
+        else:
+            parsed = [max(0.01, float(cfg.get('pair_sell_lot', 0.01)))]
+        need = self._group_count_for_set(set_index)
+        if len(parsed) < need:
+            parsed += [parsed[-1]] * (need - len(parsed))
+        return parsed[:need]
+
+    def _single_lots_for_set(self, set_index: int) -> List[float]:
+        cfg = self._get_set_config(set_index)
+        lots = cfg.get('single_lots')
+        if isinstance(lots, list) and lots:
+            parsed = [max(0.01, float(x)) for x in lots]
+        else:
+            parsed = [max(0.01, float(cfg.get('single_lot', 0.01)))]
+        need = self._group_count_for_set(set_index)
+        if len(parsed) < need:
+            parsed += [parsed[-1]] * (need - len(parsed))
+        return parsed[:need]
+
+    def _pair_buy_lot_for_set_stage(self, set_index: int, stage_idx: int) -> float:
+        lots = self._pair_buy_lots_for_set(set_index)
+        idx = max(0, min(stage_idx, len(lots) - 1))
+        return lots[idx]
+
+    def _pair_sell_lot_for_set_stage(self, set_index: int, stage_idx: int) -> float:
+        lots = self._pair_sell_lots_for_set(set_index)
+        idx = max(0, min(stage_idx, len(lots) - 1))
+        return lots[idx]
+
+    def _single_lot_for_set_group(self, set_index: int, group_idx: int) -> float:
+        lots = self._single_lots_for_set(set_index)
+        idx = max(0, min(group_idx, len(lots) - 1))
+        return lots[idx]
+
+    def _set_display(self, set_index: int) -> str:
+        return f"Set {set_index + 1}/{self.num_sets}" if self.num_sets > 1 else f"Set {set_index + 1}"
+
+    def _get_tickets_for_set(self, set_index: int) -> List[int]:
+        """Returns all tickets currently tracked under the given set_index."""
+        return [
+            t for t, info in self.state.ticket_map.items()
+            if info and info.get('set_index', 0) == set_index
+        ]
     
     @property
     def max_positions(self) -> int:
@@ -277,40 +371,11 @@ class GridBounceStrategyEngine:
         }
         return mapping.get(val, None)
 
-    def advance_to_next_set(self):
-        """
-        Advance to the next set when current set reaches max_positions.
-        Advances sequentially without wrap-around.
-        If already on the last set, no further advancement occurs.
-        """
-        if self.state.current_set_index >= (self.num_sets - 1):
-            self.activity_log.log_info(
-                f"Final set reached ({self.get_set_display()}); max positions hit. "
-                "No further set rotation."
-            )
-            return False
-
-        next_idx = self.state.current_set_index + 1
-        if next_idx < self.num_sets:
-            self.activity_log.log_info(
-                f"Max positions for Set {self.state.current_set_index + 1} reached. "
-                f"Advancing to Set {next_idx + 1}/{self.num_sets}"
-            )
-            self.state.current_set_index = next_idx
-            self.state.position_counter = 0  # Reset counter for new set
-            self.activity_log.log_info(
-                f"Now active: {self.get_set_display()} | "
-                f"max_positions={self.max_positions}, "
-                f"pair_buy={self.pair_buy_lots}, pair_sell={self.pair_sell_lots}, single={self.single_lots}"
-            )
-            return True
-        return False
-    
-    def get_set_display(self) -> str:
-        """Get a display string showing current set info"""
+    def get_set_display(self, set_index: int) -> str:
+        """Get a display string showing a specific set's info."""
         if self.num_sets > 1:
-            return f"Set {self.state.current_set_index + 1}/{self.num_sets}"
-        return ""
+            return f"Set {set_index + 1}/{self.num_sets}"
+        return f"Set {set_index + 1}"
 
     async def start_ticker(self):
         """Compatibility hook for orchestrator config refreshes."""
@@ -326,8 +391,10 @@ class GridBounceStrategyEngine:
         if self.running:
             return
         
+        self._reset_state()
         self.running = True
         self.graceful_stop = False
+        self._position_drop_detected_set_indices.clear()
         
         # Get current tick
         tick = mt5.symbol_info_tick(self.symbol)
@@ -337,631 +404,343 @@ class GridBounceStrategyEngine:
         
         center = (tick.ask + tick.bid) / 2
         self.state.center_price = center
-        
-        # Initialize center as grid_level_1
-        self.state.grid_level_1 = GridLevel(price=center, active=True)
-        
-        self.activity_log.log_start(self.state.cycle_count, center)
+        await self._open_center_pair_for_set(0, center, log_start=True)
+        await self.save_state()
+
+    async def _open_center_pair_for_set(self, set_index: int, center: float, log_start: bool = False):
+        """Open the center buy/sell pair for a specific set."""
+        set_state = self._ensure_set_state(set_index)
+        set_state.phase = "SINGLE_LEVEL"
+        set_state.grid_level_1 = GridLevel(price=center, active=True)
+        set_state.grid_level_2 = None
+        set_state.position_counter = 0
+        set_state.last_move_direction = ""
+        set_state.is_final_group_reached = False
+
+        if log_start:
+            self.activity_log.log_start(self.state.cycle_count, center, set_index=set_index)
         if self.num_sets > 1:
             self.activity_log.log_info(
-                f"Starting strategy on {self.get_set_display()} | "
-                f"max_positions={self.max_positions}, "
-                f"pair_buy={self.pair_buy_lots}, pair_sell={self.pair_sell_lots}, single={self.single_lots}"
+                f"Starting strategy on {self._set_display(set_index)} | "
+                f"max_positions={self._get_set_config(set_index).get('max_positions', 3)}, "
+                f"pair_buy={self._pair_buy_lots_for_set(set_index)}, "
+                f"pair_sell={self._pair_sell_lots_for_set(set_index)}, "
+                f"single={self._single_lots_for_set(set_index)}",
+                set_index=set_index,
             )
-        
-        # Open initial pair at center (with max-lot splitting)
-        center_buy_lot = self._pair_buy_lot_for_stage(0)
-        center_sell_lot = self._pair_sell_lot_for_stage(0)
+
+        center_buy_lot = self._center_buy_lot_for_set(set_index)
+        center_sell_lot = self._center_sell_lot_for_set(set_index)
         buy_results = await self._split_and_execute_orders("buy", center_buy_lot, "CenterBuy", center, skip_tp_sl=True)
         sell_results = await self._split_and_execute_orders("sell", center_sell_lot, "CenterSell", center, skip_tp_sl=True)
 
-        def _first(res):
-            if res and len(res) > 0:
-                return res[0]
-            return (0, 0.0, 0.0, 0.0)
-
-        buy_ticket, buy_entry, buy_tp, buy_sl = _first(buy_results)
-        sell_ticket, sell_entry, sell_tp, sell_sl = _first(sell_results)
         self.activity_log.log_info(
-            "Center positions opened without TP/SL (will be added after second entry)"
+            "Center positions opened without TP/SL (will be added after second entry)",
+            set_index=set_index,
         )
-        
-        # Store in grid_level_1
-        if buy_ticket:
-            # register all split tickets for buy
-            tickets = []
+
+        center_level = set_state.grid_level_1
+        total_opened = 0
+        if center_level:
             for (tkt, entry, tp, sl) in buy_results:
                 if not tkt:
                     continue
-                self.state.grid_level_1.positions[tkt] = {
-                    'leg': 'CenterBuy',
-                    'direction': 'buy',
-                    'entry': entry,
-                    'tp': 0.0,
-                    'sl': 0.0,
-                    'lot': center_buy_lot,
-                    'position_type': 'pair'
-                }
-                self.state.ticket_map[tkt] = self.state.grid_level_1.positions[tkt]
-                self._init_touch_flags(tkt)
+                await self._record_set_position(set_index, center_level, tkt, 'CenterBuy', 'buy', entry, 0.0, 0.0, center_buy_lot, 'pair')
                 self.activity_log.log_fire(
                     self.state.cycle_count, "CenterBuy", entry,
                     center_buy_lot, tp,
-                    sl, tkt
+                    sl, tkt, set_index=set_index
                 )
-                tickets.append(tkt)
-            # record split group
-            if len(tickets) > 1:
-                group_id = tickets[0]
-                self.state.split_group_map[group_id] = list(tickets)
-                for idd in tickets:
-                    if idd in self.state.ticket_map:
-                        self.state.ticket_map[idd]['split_group_id'] = group_id
-        
-        if sell_ticket:
-            tickets = []
+                total_opened += 1
+
             for (tkt, entry, tp, sl) in sell_results:
                 if not tkt:
                     continue
-                self.state.grid_level_1.positions[tkt] = {
-                    'leg': 'CenterSell',
-                    'direction': 'sell',
-                    'entry': entry,
-                    'tp': 0.0,
-                    'sl': 0.0,
-                    'lot': center_sell_lot,
-                    'position_type': 'pair'
-                }
-                self.state.ticket_map[tkt] = self.state.grid_level_1.positions[tkt]
-                self._init_touch_flags(tkt)
+                await self._record_set_position(set_index, center_level, tkt, 'CenterSell', 'sell', entry, 0.0, 0.0, center_sell_lot, 'pair')
                 self.activity_log.log_fire(
                     self.state.cycle_count, "CenterSell", entry,
                     center_sell_lot, tp,
-                    sl, tkt
+                    sl, tkt, set_index=set_index
                 )
-                tickets.append(tkt)
-            if len(tickets) > 1:
-                group_id = tickets[0]
-                self.state.split_group_map[group_id] = list(tickets)
-                for idd in tickets:
-                    if idd in self.state.ticket_map:
-                        self.state.ticket_map[idd]['split_group_id'] = group_id
-        
-        self.state.phase = "SINGLE_LEVEL"
-        self.state.total_positions = 2
-        # position_counter stays at 0 (these 2 don't count toward max)
-        
-        await self.save_state()
+                total_opened += 1
 
-    #tick handler - same as old one
+        self.state.total_positions += total_opened
 
-    async def on_external_tick(self, tick_data: dict):
-        """
-        Called by orchestrator on every tick
-        """
-        ask = tick_data.get('ask', 0.0)
-        bid = tick_data.get('bid', 0.0)
-        raw_spread = ask - bid
-        if raw_spread > 0:
-            self._last_known_spread = raw_spread
+    async def _process_all_set_triggers(self, ask: float, bid: float):
+        for set_index, set_state in enumerate(list(self.state.sets)):
+            if set_state.phase in {"IDLE", "CAPPED", "RESETTING"}:
+                continue
+            await self._process_set_grid_triggers(set_index, ask, bid)
 
-        if not self.running or self.state.phase == "IDLE":
+    async def _process_set_grid_triggers(self, set_index: int, ask: float, bid: float):
+        set_state = self._ensure_set_state(set_index)
+        if set_state.phase in {"IDLE", "CAPPED", "RESETTING"}:
             return
-        
-        if ask <= 0 or bid <= 0:
-            return
-        
-        async with self.execution_lock:
-            # 1. Check virtual TP/SL first so manual closures behave like real ones
-            await self._check_virtual_stops(ask, bid)
 
-            # 1. Volatility/slippage tolerant reset check (new)
-            await self._check_volatility_slippage(ask, bid)
-
-            # 2. Update touch flags FIRST (PRESERVED)
-            self._update_touch_flags(ask, bid)
-            
-            # 2. Check position drops (TP/SL detection) (PRESERVED)
-            await self._check_position_drops(ask, bid)
-            
-            # 3. Check if any position closed -> nuclear reset
-            if await self._check_nuclear_reset_trigger():
-                return  # Reset triggered, exit
-            
-            # 4. Check for grid distance triggers
-            await self._check_grid_triggers(ask, bid)
-
-    #grid distance trigger logic
-
-    async def _check_grid_triggers(self, ask: float, bid: float):
-        """
-        Check if price has moved grid_distance from current level(s)
-        and execute appropriate actions
-        """
-        if self.state.phase == "IDLE" or self.state.phase == "RESETTING":
-            return
-        
         mid = (ask + bid) / 2
         grid_dist = self.grid_distance
-        
-        # --- SINGLE LEVEL PHASE ---
-        if self.state.phase == "SINGLE_LEVEL":
-            if not self.state.grid_level_1:
+
+        if set_state.phase == "SINGLE_LEVEL":
+            if not set_state.grid_level_1:
                 return
-            center = self.state.grid_level_1.price
-            
-            # Check DOWN movement (center - grid_distance)
+            center = set_state.grid_level_1.price
             if mid <= center - grid_dist:
-                await self._activate_second_level_down(ask, bid)
+                await self._activate_second_level_for_set(set_index, "DOWN", ask, bid)
                 return
-            
-            # Check UP movement (center + grid_distance)
             if mid >= center + grid_dist:
-                await self._activate_second_level_up(ask, bid)
-                return
-        
-        # --- TWO LEVELS PHASE ---
-        elif self.state.phase == "TWO_LEVELS":
-            if not self.state.grid_level_1 or not self.state.grid_level_2:
+                await self._activate_second_level_for_set(set_index, "UP", ask, bid)
                 return
 
-            level_1_price = self.state.grid_level_1.price
-            level_2_price = self.state.grid_level_2.price
-            
-            # Determine which level is upper and which is lower
+        if set_state.phase == "TWO_LEVELS":
+            if not set_state.grid_level_1 or not set_state.grid_level_2:
+                return
+
+            level_1_price = set_state.grid_level_1.price
+            level_2_price = set_state.grid_level_2.price
             upper_price = max(level_1_price, level_2_price)
             lower_price = min(level_1_price, level_2_price)
-            
-            upper_level = self.state.grid_level_1 if level_1_price == upper_price else self.state.grid_level_2
-            lower_level = self.state.grid_level_1 if level_1_price == lower_price else self.state.grid_level_2
-            
-            # Check if moving DOWN (from upper to lower)
-            if mid <= lower_price and self.state.last_move_direction != "DOWN_TO_LOWER":
-                await self._bounce_down(upper_level, lower_level, ask, bid)
-                return
-            
-            # Check if moving UP (from lower to upper)
-            if mid >= upper_price and self.state.last_move_direction != "UP_TO_UPPER":
-                await self._bounce_up(lower_level, upper_level, ask, bid)
+
+            upper_level = set_state.grid_level_1 if level_1_price == upper_price else set_state.grid_level_2
+            lower_level = set_state.grid_level_1 if level_1_price == lower_price else set_state.grid_level_2
+
+            if mid <= lower_price and set_state.last_move_direction != "DOWN_TO_LOWER":
+                await self._bounce_set(set_index, upper_level, lower_level, ask, bid, "DOWN")
                 return
 
-
-    async def _activate_second_level_down(self, ask: float, bid: float):
-        """
-        First grid distance hit - moving DOWN from center
-        
-        Actions:
-        1. Close SELL at center (grid_level_1) - FIFO
-        2. Activate grid_level_2 at (center - grid_distance)
-        3. Open 3 positions at grid_level_2: Pair BS + Single SELL
-        """
-        center_level = self.state.grid_level_1
-        if not center_level:
-            return
-        new_price = center_level.price - self.grid_distance
-        
-        self.activity_log.log_info(f"Moving DOWN: Grid distance reached at {new_price:.2f}")
-        
-        # Step 1: Close SELL at center (FIFO)
-        sell_tickets = center_level.get_sell_tickets()
-        if sell_tickets:
-            oldest_sell = sell_tickets[0]  # FIFO
-            if self._close_position(oldest_sell):
-                self.activity_log.log_info(f"Closed SELL at center (ticket {oldest_sell})")
-                self._remove_ticket_from_tracking(oldest_sell, center_level)
-        
-        # Step 2: Activate grid_level_2
-        self.state.grid_level_2 = GridLevel(price=new_price, active=True)
-        self.state.phase = "TWO_LEVELS"
-        self.state.last_move_direction = "DOWN_TO_LOWER"
-        
-        self.activity_log.log_grid_activation("Lower Level", new_price)
-        
-        # Step 3: Check max_positions before opening
-        if self.state.position_counter >= self.max_positions:
-            # Try to advance to next set
-            if not self.advance_to_next_set():
-                self.activity_log.log_info(f"Max positions ({self.max_positions}) reached for all sets - skipping new opens")
-                await self.save_state()
-                return
-            # Successfully advanced to next set, continue with opening
-        
-        # Open 3 positions at new level
-        await self._open_triple_positions(
-            self.state.grid_level_2, 
-            ask, bid, 
-            direction="DOWN"  # Opened because we moved down
-        )
-
-        self.state.position_counter += 3
-        await self._apply_anchor_alignment()
-        await self.save_state()
-
-
-    async def _activate_second_level_up(self, ask: float, bid: float):
-        """
-        First grid distance hit - moving UP from center
-        
-        Actions:
-        1. Close BUY at center (grid_level_1) - FIFO
-        2. Activate grid_level_2 at (center + grid_distance)
-        3. Open 3 positions at grid_level_2: Pair BS + Single BUY
-        """
-        center_level = self.state.grid_level_1
-        if not center_level:
-            return
-        new_price = center_level.price + self.grid_distance
-        
-        self.activity_log.log_info(f"Moving UP: Grid distance reached at {new_price:.2f}")
-        
-        # Step 1: Close BUY at center (FIFO)
-        buy_tickets = center_level.get_buy_tickets()
-        if buy_tickets:
-            oldest_buy = buy_tickets[0]  # FIFO
-            if self._close_position(oldest_buy):
-                self.activity_log.log_info(f"Closed BUY at center (ticket {oldest_buy})")
-                self._remove_ticket_from_tracking(oldest_buy, center_level)
-        
-        # Step 2: Activate grid_level_2
-        self.state.grid_level_2 = GridLevel(price=new_price, active=True)
-        self.state.phase = "TWO_LEVELS"
-        self.state.last_move_direction = "UP_TO_UPPER"
-        
-        self.activity_log.log_grid_activation("Upper Level", new_price)
-        
-        # Step 3: Check max_positions
-        if self.state.position_counter >= self.max_positions:
-            # Try to advance to next set
-            if not self.advance_to_next_set():
-                self.activity_log.log_info(f"Max positions ({self.max_positions}) reached for all sets - skipping new opens")
-                await self.save_state()
-                return
-            # Successfully advanced to next set, continue with opening
-        
-        # Open 3 positions at new level
-        await self._open_triple_positions(
-            self.state.grid_level_2,
-            ask, bid,
-            direction="UP"  # Opened because we moved up
-        )
-
-        self.state.position_counter += 3
-        await self._apply_anchor_alignment()
-        await self.save_state()
-
-
-    async def _bounce_down(self, upper_level: GridLevel, lower_level: GridLevel, 
-                        ask: float, bid: float):
-        """
-        Bounce DOWN from upper level to lower level
-        
-        Actions:
-        1. Close SELL at upper level (FIFO)
-        2. Open 3 positions at lower level: Pair BS + Single SELL
-        """
-        self.activity_log.log_info(f"Bouncing DOWN to {lower_level.price:.2f}")
-        
-        # Step 1: Close SELL at upper (FIFO)
-        sell_tickets = upper_level.get_sell_tickets()
-        if sell_tickets:
-            oldest_sell = sell_tickets[0]
-            if self._close_position(oldest_sell):
-                self.activity_log.log_info(f"Closed SELL at upper (ticket {oldest_sell})")
-                self._remove_ticket_from_tracking(oldest_sell, upper_level)
-        
-        # Step 2: Check max_positions
-        if self.state.position_counter >= self.max_positions:
-            # Try to advance to next set
-            if not self.advance_to_next_set():
-                self.activity_log.log_info(f"Max positions ({self.max_positions}) reached for all sets - skipping new opens")
-                self.state.last_move_direction = "DOWN_TO_LOWER"
-                await self.save_state()
-                return
-            # Successfully advanced to next set, continue with opening
-            self.activity_log.log_info(f"Advancing to next set - opening positions for {self.get_set_display()}")
-        
-        self.state.last_move_direction = "DOWN_TO_LOWER"
-        
-        # Step 3: Open 3 positions at lower
-        await self._open_triple_positions(lower_level, ask, bid, direction="DOWN")
-        
-        self.state.position_counter += 3
-        self.state.last_move_direction = "DOWN_TO_LOWER"
-        # Re-apply anchor alignment so bounce pair legs get anchor TP/SL (not fill-price TP/SL)
-        await self._apply_anchor_alignment()
-        await self.save_state()
-
-
-    async def _bounce_up(self, lower_level: GridLevel, upper_level: GridLevel,
-                        ask: float, bid: float):
-        """
-        Bounce UP from lower level to upper level
-        
-        Actions:
-        1. Close BUY at lower level (FIFO)
-        2. Open 3 positions at upper level: Pair BS + Single BUY
-        """
-        self.activity_log.log_info(f"Bouncing UP to {upper_level.price:.2f}")
-        
-        # Step 1: Close BUY at lower (FIFO)
-        buy_tickets = lower_level.get_buy_tickets()
-        if buy_tickets:
-            oldest_buy = buy_tickets[0]
-            if self._close_position(oldest_buy):
-                self.activity_log.log_info(f"Closed BUY at lower (ticket {oldest_buy})")
-                self._remove_ticket_from_tracking(oldest_buy, lower_level)
-        
-        # Step 2: Check max_positions
-        if self.state.position_counter >= self.max_positions:
-            # Try to advance to next set
-            if not self.advance_to_next_set():
-                self.activity_log.log_info(f"Max positions ({self.max_positions}) reached for all sets - skipping new opens")
-                self.state.last_move_direction = "UP_TO_UPPER"
-                await self.save_state()
-                return
-            # Successfully advanced to next set, continue with opening
-            self.activity_log.log_info(f"Advancing to next set - opening positions for {self.get_set_display()}")
-        
-        self.state.last_move_direction = "UP_TO_UPPER"
-        
-        # Step 3: Open 3 positions at upper
-        await self._open_triple_positions(upper_level, ask, bid, direction="UP")
-        
-        self.state.position_counter += 3
-        self.state.last_move_direction = "UP_TO_UPPER"
-        # Re-apply anchor alignment so bounce pair legs get anchor TP/SL (not fill-price TP/SL)
-        await self._apply_anchor_alignment()
-        await self.save_state()
-
-
-    #position opening helper (triple opens for grid activation and bounces)
-
-    async def _open_triple_positions(self, grid_level: GridLevel, ask: float, bid: float,
-                                    direction: str):
-        """
-        Open 3 positions at a grid level:
-        - 1 Pair Buy
-        - 1 Pair Sell
-        - 1 Single (Buy if direction="UP", Sell if direction="DOWN")
-        
-        Args:
-            grid_level: GridLevel object to store positions in
-            ask, bid: Current prices
-            direction: "UP" or "DOWN" (determines single trade direction)
-        """
-        # Pre-entry Volatility Check
-        factor = self.volatility_tolerance_factor
-        if factor is not None:
-            mid = (ask + bid) / 2
-            if self.state.grid_level_2 and self.state.grid_level_2.active:
-                reference_level_price = self._get_nearest_level_price(mid)
-            else:
-                reference_level_price = self.state.grid_level_1.price if self.state.grid_level_1 else self.state.center_price
-            
-            adjusted_distance = self._adjusted_distance(mid, reference_level_price)
-            threshold = float(self.grid_distance) * float(factor)
-            
-            if adjusted_distance >= threshold:
-                self.activity_log.log_info(
-                    f"VOLATILITY ABORT (pre-entry): Adjusted distance {adjusted_distance:.5f} from level {reference_level_price:.5f} "
-                    f"exceeds threshold {threshold:.5f}. Aborting triple open and triggering nuclear reset."
-                )
-                self._position_drop_detected = False
-                await self._nuclear_reset_and_restart("VOLATILITY_RESET", self.state.realized_pnl)
+            if mid >= upper_price and set_state.last_move_direction != "UP_TO_UPPER":
+                await self._bounce_set(set_index, lower_level, upper_level, ask, bid, "UP")
                 return
 
-        target_price = grid_level.price
-        open_count = 0
-        single_results = []
-        
-        # Stage index: 0=center pair, 1=first adaptive pair, 2=second adaptive pair...
-        pair_stage = (self.state.position_counter // 3) + 1
-        single_group = self.state.position_counter // 3
+    def _sync_legacy_state_from_set(self, set_index: int):
+        return
 
-        pair_buy_lot = self._pair_buy_lot_for_stage(pair_stage)
-        pair_sell_lot = self._pair_sell_lot_for_stage(pair_stage)
-        single_lot = self._single_lot_for_group(single_group)
+    async def _record_set_position(
+        self,
+        set_index: int,
+        grid_level: GridLevel,
+        ticket: int,
+        leg_name: str,
+        direction: str,
+        entry: float,
+        tp: float,
+        sl: float,
+        lot: float,
+        position_type: str,
+    ):
+        position = {
+            'leg': leg_name,
+            'direction': direction,
+            'entry': entry,
+            'tp': tp,
+            'sl': sl,
+            'lot': lot,
+            'position_type': position_type,
+            'set_index': set_index,
+        }
+        grid_level.positions[ticket] = position
+        self.state.ticket_map[ticket] = position
+        self._init_touch_flags(ticket)
 
-        if self.num_sets > 1:
-            self.activity_log.log_info(
-                f"Opening triple on {self.get_set_display()} | "
-                f"counter={self.state.position_counter}/{self.max_positions} | "
-                f"direction={direction} | pair_stage={pair_stage}, single_group={single_group}"
+        if self.repository is not None:
+            grid_level_index = 1
+            set_state = self._ensure_set_state(set_index)
+            if set_state.grid_level_2 is grid_level:
+                grid_level_index = 2
+            await self.repository.save_ticket(
+                ticket=ticket,
+                cycle_id=self.state.cycle_count,
+                pair_index=0,
+                leg=leg_name,
+                trade_count=0,
+                entry_price=entry,
+                tp_price=tp,
+                sl_price=sl,
+                set_index=set_index,
+                grid_level=grid_level_index,
             )
 
-        if direction == "UP":
-            # BBS: Buy1 (pair) + SingleSell (single_custom) + Buy2 (pair)
-            leg1_name, leg1_type, leg1_skip = "Buy1", "pair", True
-            leg1_tp_override, leg1_sl_override = None, None
+    async def _open_set_orders(
+        self,
+        set_index: int,
+        grid_level: GridLevel,
+        ask: float,
+        bid: float,
+        direction: str,
+        lot: float,
+        leg_name: str,
+        position_type: str,
+        tp_pips_override: Optional[float] = None,
+        sl_pips_override: Optional[float] = None,
+        skip_tp_sl: bool = False,
+    ) -> List[Tuple[int, float, float, float]]:
+        results = await self._split_and_execute_orders(
+            direction,
+            lot,
+            leg_name,
+            grid_level.price,
+            tp_pips_override=tp_pips_override,
+            sl_pips_override=sl_pips_override,
+            skip_tp_sl=skip_tp_sl,
+        )
 
-            leg2_name, leg2_type, leg2_skip = "SingleSell", "single_custom", False
-            leg2_tp_override, leg2_sl_override = self.second_entry_sell_tp_pips, self.second_entry_sell_sl_pips
+        tickets = []
+        for (tkt, entry, tp, sl) in results:
+            if not tkt:
+                continue
+            await self._record_set_position(set_index, grid_level, tkt, leg_name, direction, entry, tp, sl, lot, position_type)
+            self.activity_log.log_fire(
+                self.state.cycle_count,
+                leg_name,
+                entry,
+                lot,
+                tp,
+                sl,
+                tkt,
+                set_index=set_index,
+            )
+            tickets.append(tkt)
 
-            leg3_dir = "buy"
-            leg3_name, leg3_type, leg3_skip = "Buy2", "pair", True
-            leg3_tp_override, leg3_sl_override = None, None
+        if len(tickets) > 1:
+            group_id = tickets[0]
+            self.state.split_group_map[group_id] = list(tickets)
+            for ticket in tickets:
+                if ticket in self.state.ticket_map:
+                    self.state.ticket_map[ticket]['split_group_id'] = group_id
+
+        return results
+
+    async def _open_group_for_set(
+        self,
+        set_index: int,
+        grid_level: GridLevel,
+        ask: float,
+        bid: float,
+        direction: str,
+        current_group: int,
+    ) -> bool:
+        set_state = self._ensure_set_state(set_index)
+        group_count = self._group_count_for_set(set_index)
+
+        if current_group > group_count:
+            set_state.phase = "CAPPED"
+            self._sync_legacy_state_from_set(set_index)
+            return False
+
+        pair_stage_idx = max(0, current_group - 1)
+        pair_buy_lot = self._pair_buy_lot_for_set_stage(set_index, pair_stage_idx)
+        pair_sell_lot = self._pair_sell_lot_for_set_stage(set_index, pair_stage_idx)
+        single_lot = self._single_lot_for_set_group(set_index, pair_stage_idx)
+
+        if current_group < group_count:
+            if direction == "UP":
+                await self._open_set_orders(set_index, grid_level, ask, bid, "buy", pair_buy_lot, "Buy1", "pair", skip_tp_sl=True)
+                await self._open_set_orders(set_index, grid_level, ask, bid, "sell", single_lot, "SingleSell", "single_custom", self.second_entry_sell_tp_pips, self.second_entry_sell_sl_pips)
+                await self._open_set_orders(set_index, grid_level, ask, bid, "buy", pair_sell_lot, "Buy2", "pair", skip_tp_sl=True)
+            else:
+                await self._open_set_orders(set_index, grid_level, ask, bid, "buy", single_lot, "SingleBuy", "single_custom", self.second_entry_buy_tp_pips, self.second_entry_buy_sl_pips)
+                await self._open_set_orders(set_index, grid_level, ask, bid, "sell", pair_buy_lot, "Sell1", "pair", skip_tp_sl=True)
+                await self._open_set_orders(set_index, grid_level, ask, bid, "sell", pair_sell_lot, "Sell2", "pair", skip_tp_sl=True)
+            set_state.position_counter += 3
+            self._sync_legacy_state_from_set(set_index)
+            return True
+
+        if current_group == group_count:
+            if direction == "UP":
+                await self._open_set_orders(set_index, grid_level, ask, bid, "sell", single_lot, "SingleSell", "single_custom", self.second_entry_sell_tp_pips, self.second_entry_sell_sl_pips)
+            else:
+                await self._open_set_orders(set_index, grid_level, ask, bid, "buy", single_lot, "SingleBuy", "single_custom", self.second_entry_buy_tp_pips, self.second_entry_buy_sl_pips)
+            set_state.position_counter += 1
+            set_state.is_final_group_reached = True
+            set_state.phase = "CAPPED"
+            self._sync_legacy_state_from_set(set_index)
+            await self._handoff_to_next_set(set_index, grid_level.price, ask, bid)
+            return True
+
+        set_state.phase = "CAPPED"
+        self._sync_legacy_state_from_set(set_index)
+        return False
+
+    async def _handoff_to_next_set(self, set_index: int, price: float, ask: float, bid: float):
+        next_index = set_index + 1
+        current_state = self._ensure_set_state(set_index)
+        if next_index >= self.num_sets:
+            current_state.phase = "CAPPED"
+            self._sync_legacy_state_from_set(set_index)
+            return False
+
+        current_state.phase = "CAPPED"
+        await self._open_center_pair_for_set(next_index, price, log_start=True)
+        next_state = self._ensure_set_state(next_index)
+        next_state.phase = "SINGLE_LEVEL"
+        next_state.grid_level_1 = GridLevel(price=price, active=True)
+        next_state.grid_level_2 = None
+        next_state.position_counter = 0
+        next_state.last_move_direction = ""
+        next_state.is_final_group_reached = False
+        if next_index == 0:
+            self._sync_legacy_state_from_set(next_index)
+        await self.save_state()
+        return True
+
+    async def _activate_second_level_for_set(self, set_index: int, direction: str, ask: float, bid: float):
+        set_state = self._ensure_set_state(set_index)
+        center_level = set_state.grid_level_1
+        if not center_level:
+            return
+
+        new_price = center_level.price + self.grid_distance if direction == "UP" else center_level.price - self.grid_distance
+        self.activity_log.log_info(f"Moving {direction}: Grid distance reached at {new_price:.2f}", set_index=set_index)
+
+        if direction == "DOWN":
+            sell_tickets = center_level.get_sell_tickets()
+            if sell_tickets:
+                oldest_sell = sell_tickets[0]
+                if self._close_position(oldest_sell):
+                    self.activity_log.log_info(f"Closed SELL at center (ticket {oldest_sell})", set_index=set_index)
+                    self._remove_ticket_from_tracking(oldest_sell, center_level)
         else:
-            # SSB: SingleBuy (single_custom) + Sell1 (pair) + Sell2 (pair)
-            leg1_name, leg1_type, leg1_skip = "SingleBuy", "single_custom", False
-            leg1_tp_override, leg1_sl_override = self.second_entry_buy_tp_pips, self.second_entry_buy_sl_pips
+            buy_tickets = center_level.get_buy_tickets()
+            if buy_tickets:
+                oldest_buy = buy_tickets[0]
+                if self._close_position(oldest_buy):
+                    self.activity_log.log_info(f"Closed BUY at center (ticket {oldest_buy})", set_index=set_index)
+                    self._remove_ticket_from_tracking(oldest_buy, center_level)
 
-            leg2_name, leg2_type, leg2_skip = "Sell1", "pair", True
-            leg2_tp_override, leg2_sl_override = None, None
+        set_state.grid_level_2 = GridLevel(price=new_price, active=True)
+        set_state.phase = "TWO_LEVELS"
+        set_state.last_move_direction = "DOWN_TO_LOWER" if direction == "DOWN" else "UP_TO_UPPER"
+        self.activity_log.log_grid_activation("Lower Level" if direction == "DOWN" else "Upper Level", new_price, set_index=set_index)
 
-            leg3_dir = "sell"
-            leg3_name, leg3_type, leg3_skip = "Sell2", "pair", True
-            leg3_tp_override, leg3_sl_override = None, None
+        current_group = set_state.position_counter // 3 + 1
+        await self._open_group_for_set(set_index, set_state.grid_level_2, ask, bid, direction, current_group)
+        self._sync_legacy_state_from_set(set_index)
+        await self._apply_anchor_alignment_for_set(set_index)
+        await self.save_state()
 
-        # Execute Leg 1 (Buy side of pair lot)
-        # Pair legs open with no TP/SL — anchor alignment sets them afterward.
-        # Single_custom legs use second_entry UI overrides directly from fill price.
-        buy_results = await self._split_and_execute_orders(
-            "buy", pair_buy_lot, leg1_name, target_price,
-            tp_pips_override=leg1_tp_override,
-            sl_pips_override=leg1_sl_override,
-            skip_tp_sl=leg1_skip
-        )
-        buy_tickets = []
-        for (tkt, entry, tp, sl) in buy_results:
-            if not tkt:
-                continue
-            open_count += 1
-            grid_level.positions[tkt] = {
-                'leg': leg1_name,
-                'direction': 'buy',
-                'entry': entry,
-                'tp': tp,
-                'sl': sl,
-                'lot': pair_buy_lot,
-                'position_type': leg1_type
-            }
-            self.state.ticket_map[tkt] = grid_level.positions[tkt]
-            self._init_touch_flags(tkt)
-            self.activity_log.log_fire(
-                self.state.cycle_count, leg1_name, entry,
-                pair_buy_lot, tp, sl, tkt
-            )
-            buy_tickets.append(tkt)
-        if len(buy_tickets) > 1:
-            group_id = buy_tickets[0]
-            self.state.split_group_map[group_id] = list(buy_tickets)
-            for idd in buy_tickets:
-                if idd in self.state.ticket_map:
-                    self.state.ticket_map[idd]['split_group_id'] = group_id
-
-        # Execute Leg 2 (Sell side of pair lot)
-        sell_results = await self._split_and_execute_orders(
-            "sell", pair_sell_lot, leg2_name, target_price,
-            tp_pips_override=leg2_tp_override,
-            sl_pips_override=leg2_sl_override,
-            skip_tp_sl=leg2_skip
-        )
-        sell_tickets = []
-        for (tkt, entry, tp, sl) in sell_results:
-            if not tkt:
-                continue
-            open_count += 1
-            grid_level.positions[tkt] = {
-                'leg': leg2_name,
-                'direction': 'sell',
-                'entry': entry,
-                'tp': tp,
-                'sl': sl,
-                'lot': pair_sell_lot,
-                'position_type': leg2_type
-            }
-            self.state.ticket_map[tkt] = grid_level.positions[tkt]
-            self._init_touch_flags(tkt)
-            self.activity_log.log_fire(
-                self.state.cycle_count, leg2_name, entry,
-                pair_sell_lot, tp, sl, tkt
-            )
-            sell_tickets.append(tkt)
-        if len(sell_tickets) > 1:
-            group_id = sell_tickets[0]
-            self.state.split_group_map[group_id] = list(sell_tickets)
-            for idd in sell_tickets:
-                if idd in self.state.ticket_map:
-                    self.state.ticket_map[idd]['split_group_id'] = group_id
-
-        # Execute Leg 3 (Single lot)
-        single_results = await self._split_and_execute_orders(
-            leg3_dir, single_lot, leg3_name, target_price,
-            tp_pips_override=leg3_tp_override,
-            sl_pips_override=leg3_sl_override,
-            skip_tp_sl=leg3_skip
-        )
-        single_tickets = []
-        for (tkt, entry, tp, sl) in single_results:
-            if not tkt:
-                continue
-            open_count += 1
-            grid_level.positions[tkt] = {
-                'leg': leg3_name,
-                'direction': leg3_dir,
-                'entry': entry,
-                'tp': tp,
-                'sl': sl,
-                'lot': single_lot,
-                'position_type': leg3_type
-            }
-            self.state.ticket_map[tkt] = grid_level.positions[tkt]
-            self._init_touch_flags(tkt)
-            self.activity_log.log_fire(
-                self.state.cycle_count, leg3_name, entry,
-                single_lot, tp, sl, tkt
-            )
-            single_tickets.append(tkt)
-        if len(single_tickets) > 1:
-            group_id = single_tickets[0]
-            self.state.split_group_map[group_id] = list(single_tickets)
-            for idd in single_tickets:
-                if idd in self.state.ticket_map:
-                    self.state.ticket_map[idd]['split_group_id'] = group_id
-
-        # Post-fill Volatility Check
-        factor = self.volatility_tolerance_factor
-        if factor is not None:
-            # Collect all fill prices from the results of all three legs
-            fill_prices = []
-            for r_list in (buy_results, sell_results, single_results):
-                for (tkt, entry, tp, sl) in r_list:
-                    if tkt != 0:
-                        fill_prices.append(entry)
-            
-            # Determine the reference level the same way as Layer 1
-            mid = (ask + bid) / 2
-            if self.state.grid_level_2 and self.state.grid_level_2.active:
-                reference_level_price = self._get_nearest_level_price(mid)
-            else:
-                reference_level_price = self.state.grid_level_1.price if self.state.grid_level_1 else self.state.center_price
-            
-            threshold = float(self.grid_distance) * float(factor)
-            for fill_price in fill_prices:
-                adjusted_distance = self._adjusted_distance(fill_price, reference_level_price)
-                if adjusted_distance >= threshold:
-                    self.activity_log.log_info(
-                        f"VOLATILITY ABORT (post-fill): Fill price {fill_price:.5f} adjusted distance {adjusted_distance:.5f} "
-                        f"from level {reference_level_price:.5f} exceeds threshold {threshold:.5f}. Triggering nuclear reset."
-                    )
-                    self._position_drop_detected = False
-                    await self._nuclear_reset_and_restart("VOLATILITY_RESET", self.state.realized_pnl)
-                    return
-
-        self.state.total_positions += open_count
-    
-    def _compute_anchors(self) -> tuple[float, float]:
-        """
-        upper_anchor = max(level1, level2) + (sl_pips * point)
-        lower_anchor = min(level1, level2) - (sl_pips * point)
-        """
-        level_1 = self.state.grid_level_1.price if self.state.grid_level_1 else self.state.center_price
-        level_2 = self.state.grid_level_2.price if self.state.grid_level_2 else self.state.center_price
+    def _compute_anchors_for_set(self, set_index: int) -> tuple[float, float]:
+        set_state = self._ensure_set_state(set_index)
+        level_1 = set_state.grid_level_1.price if set_state.grid_level_1 else self.state.center_price
+        level_2 = set_state.grid_level_2.price if set_state.grid_level_2 else self.state.center_price
         upper = max(level_1, level_2)
         lower = min(level_1, level_2)
         sl_dist = float(self.sl_pips)
         return upper + sl_dist, lower - sl_dist
 
-    async def _apply_anchor_alignment(self):
-        """
-        Apply anchor TP/SL to all PAIR positions.
-        Skips single_custom positions entirely (they keep their fill-price TP/SL).
-        Sends TRADE_ACTION_SLTP to MT5, updates ticket_map and grid_level containers.
-        BUY pairs: TP = upper_anchor, SL = lower_anchor
-        SELL pairs: TP = lower_anchor, SL = upper_anchor
-        """
-        upper_anchor, lower_anchor = self._compute_anchors()
+    async def _apply_anchor_alignment_for_set(self, set_index: int):
+        """Apply anchor TP/SL to all pair positions that belong to one set."""
+        set_state = self._ensure_set_state(set_index)
+        upper_anchor, lower_anchor = self._compute_anchors_for_set(set_index)
 
         self.activity_log.log_info(
-            f"Applying anchor alignment: upper={upper_anchor:.5f}, lower={lower_anchor:.5f} "
-            f"(sl_pips={self.sl_pips})"
+            f"Applying anchor alignment: upper={upper_anchor:.5f}, lower={lower_anchor:.5f} (sl_pips={self.sl_pips})",
+            set_index=set_index,
         )
 
         for ticket, info in list(self.state.ticket_map.items()):
-            if not info:
+            if not info or info.get('set_index', 0) != set_index:
                 continue
             if info.get('position_type', 'pair') != 'pair':
-                continue  # skip single_custom
+                continue
 
             direction = info.get('direction', '')
             new_tp = upper_anchor if direction == 'buy' else lower_anchor
@@ -978,15 +757,77 @@ class GridBounceStrategyEngine:
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 info['tp'] = new_tp
                 info['sl'] = new_sl
-                for level in [self.state.grid_level_1, self.state.grid_level_2]:
+                for level in [set_state.grid_level_1, set_state.grid_level_2]:
                     if level and ticket in level.positions:
                         level.positions[ticket]['tp'] = new_tp
                         level.positions[ticket]['sl'] = new_sl
-            else:
-                error = result.comment if result else mt5.last_error()
-                #self.activity_log.log_error(
-                    #f"Anchor alignment failed for ticket {ticket} ({direction}): {error}"
-                #)
+
+    async def _bounce_set(self, set_index: int, source_level: GridLevel, destination_level: GridLevel,
+                          ask: float, bid: float, direction: str):
+        set_state = self._ensure_set_state(set_index)
+        if direction == "DOWN":
+            self.activity_log.log_info(f"Bouncing DOWN to {destination_level.price:.2f}", set_index=set_index)
+            sell_tickets = source_level.get_sell_tickets()
+            if sell_tickets:
+                oldest_sell = sell_tickets[0]
+                if self._close_position(oldest_sell):
+                    self.activity_log.log_info(f"Closed SELL at upper (ticket {oldest_sell})", set_index=set_index)
+                    self._remove_ticket_from_tracking(oldest_sell, source_level)
+        else:
+            self.activity_log.log_info(f"Bouncing UP to {destination_level.price:.2f}", set_index=set_index)
+            buy_tickets = source_level.get_buy_tickets()
+            if buy_tickets:
+                oldest_buy = buy_tickets[0]
+                if self._close_position(oldest_buy):
+                    self.activity_log.log_info(f"Closed BUY at lower (ticket {oldest_buy})", set_index=set_index)
+                    self._remove_ticket_from_tracking(oldest_buy, source_level)
+
+        current_group = set_state.position_counter // 3 + 1
+        await self._open_group_for_set(set_index, destination_level, ask, bid, direction, current_group)
+        set_state.last_move_direction = "DOWN_TO_LOWER" if direction == "DOWN" else "UP_TO_UPPER"
+        self._sync_legacy_state_from_set(set_index)
+        await self._apply_anchor_alignment_for_set(set_index)
+        await self.save_state()
+
+    #tick handler - same as old one
+
+    async def on_external_tick(self, tick_data: dict):
+        """
+        Called by orchestrator on every tick
+        """
+        ask = tick_data.get('ask', 0.0)
+        bid = tick_data.get('bid', 0.0)
+        raw_spread = ask - bid
+        if raw_spread > 0:
+            self._last_known_spread = raw_spread
+
+        if not self.running or not self.state.sets or not any(s.phase not in {"IDLE"} for s in self.state.sets):
+            return
+        
+        if ask <= 0 or bid <= 0:
+            return
+        
+        async with self.execution_lock:
+            # 1. Check virtual TP/SL first so manual closures behave like real ones
+            await self._check_virtual_stops(ask, bid)
+
+            # 1. Volatility/slippage tolerant reset check (new)
+            await self._check_volatility_slippage(ask, bid)
+
+            # 2. Update touch flags FIRST (PRESERVED)
+            self._update_touch_flags(ask, bid)
+            
+            # 3. Check position drops (TP/SL detection) (PRESERVED)
+            await self._check_position_drops(ask, bid)
+            
+            # 4. Check if any position closed -> nuclear reset
+            if await self._check_nuclear_reset_trigger():
+                return  # Reset triggered, exit
+            
+            # 5. Check for grid distance triggers across all sets
+            await self._process_all_set_triggers(ask, bid)
+
+    #grid distance trigger logic
 
     #TP/SL detection helpers (Same as old logic)
 
@@ -1099,15 +940,18 @@ class GridBounceStrategyEngine:
                             self.activity_log.log_error(f"Failed to close split-group ticket {t}")
                 # Log as single event
                 self.state.realized_pnl += group_realized
+                group_set_index = info.get('set_index', 0)
                 if any_pair:
-                    self.activity_log.log_sl_hit(ticket, info.get('leg', ''), 0.0, group_realized, triggered_reset=True)
-                    self._position_drop_detected = True
+                    self.activity_log.log_sl_hit(ticket, info.get('leg', ''), 0.0, group_realized, triggered_reset=True, set_index=group_set_index)
+                    self._position_drop_detected_set_indices.add(group_set_index)
                 else:
-                    self.activity_log.log_sl_hit(ticket, info.get('leg', ''), 0.0, group_realized, triggered_reset=False)
+                    self.activity_log.log_sl_hit(ticket, info.get('leg', ''), 0.0, group_realized, triggered_reset=False, set_index=group_set_index)
 
                 # Remove all tickets in group from tracking
                 for t in list(group_tickets):
                     self._remove_ticket_from_all_levels(t)
+                    if self.repository is not None:
+                        await self.repository.delete_ticket(t)
                     self.state.total_positions = max(0, self.state.total_positions - 1)
                 continue
 
@@ -1144,22 +988,25 @@ class GridBounceStrategyEngine:
 
             # Determine if this closure triggers reset
             triggers_reset = (position_type == 'pair')
+            set_index = info.get('set_index', 0)
 
             # Log with reset trigger indicator
             if is_tp:
-                self.activity_log.log_tp_hit(ticket, leg, close_price, realized, "", triggered_reset=triggers_reset)
+                self.activity_log.log_tp_hit(ticket, leg, close_price, realized, "", triggered_reset=triggers_reset, set_index=set_index)
             else:
-                self.activity_log.log_sl_hit(ticket, leg, close_price, realized, triggered_reset=triggers_reset)
+                self.activity_log.log_sl_hit(ticket, leg, close_price, realized, triggered_reset=triggers_reset, set_index=set_index)
 
             # Remove from tracking
             self._remove_ticket_from_all_levels(ticket)
+            if self.repository is not None:
+                await self.repository.delete_ticket(ticket)
 
             # Decrement total (for both pair and custom singles)
             self.state.total_positions -= 1
 
             # Set reset flag ONLY for pair positions
             if triggers_reset:
-                self._position_drop_detected = True
+                self._position_drop_detected_set_indices.add(set_index)
         
         if dropped:
             await self.save_state()
@@ -1176,60 +1023,52 @@ class GridBounceStrategyEngine:
         # If any position dropped, _check_position_drops already handled logging
         # Now we just check if total_positions decreased
         
-        if self._position_drop_detected:
-            self.activity_log.log_info("Position closed via TP/SL - triggering nuclear reset")
-            self._position_drop_detected = False
-            await self._nuclear_reset_and_restart("TP_SL_HIT", self.state.realized_pnl)
+        if self._position_drop_detected_set_indices:
+            affected_sets = sorted(self._position_drop_detected_set_indices)
+            self._position_drop_detected_set_indices.clear()
+            self.activity_log.log_info(
+                f"Position closed via TP/SL - triggering nuclear reset for sets {affected_sets}"
+            )
+            for set_index in affected_sets:
+                await self._nuclear_reset_set(set_index, "TP_SL_HIT")
             return True
         
         return False
 
 
-    async def _nuclear_reset_and_restart(self, reason: str, total_pnl: float):
+    async def _nuclear_reset_set(self, set_index: int, reason: str):
         """
-        PRESERVED BUT MODIFIED FROM ORIGINAL
-        
-        Nuclear reset - close ALL positions, reset state, then:
-        - If graceful_stop is True: stop completely
-        - Otherwise: auto-restart new cycle at current price
+        Reset only one set and restart it from the current market price.
         """
+        self._ensure_set_state(set_index)
         old_cycle = self.state.cycle_count
-        
-        print(f"[RESET] {self.symbol}: Cycle {old_cycle} ended. Reason: {reason}, PnL: ${total_pnl:.2f}")
-        
-        self.state.phase = "RESETTING"
-        self.activity_log.log_phase_transition("*", "RESETTING")
-        
-        # Close ALL positions
-        positions = mt5.positions_get(symbol=self.symbol)
+        current_price = self.current_price
+
+        print(f"[RESET] {self.symbol}: Set {set_index + 1} reset. Reason: {reason}")
+        self.activity_log.log_reset(old_cycle, old_cycle + 1, reason, self.state.realized_pnl, set_index=set_index)
+
+        # Close only pair positions that belong to this set.
+        set_tickets = [
+            ticket for ticket in self._get_tickets_for_set(set_index)
+            if self.state.ticket_map.get(ticket, {}).get('position_type', 'pair') == 'pair'
+        ]
         closed_count = 0
-        if positions:
-            for pos in positions:
-                if self._close_position(pos.ticket):
-                    closed_count += 1
-            print(f"[RESET] {self.symbol}: Closed {closed_count}/{len(positions)} positions")
-        
-        # Log reset
-        self.activity_log.log_reset(old_cycle, old_cycle + 1, reason, total_pnl)
-        
-        # Reset state but increment cycle
-        self._reset_state()
-        self.state.cycle_count = old_cycle + 1
-        
-        # Check graceful stop
-        if self.graceful_stop:
-            self.running = False
-            self.graceful_stop = False
-            self.state.phase = "IDLE"
-            self.activity_log.log_stop(self.state.cycle_count, "graceful_stop_complete")
-            await self.save_state()
-            print(f"[STOP] {self.symbol}: Graceful stop complete.")
-            return
-        
-        # Auto-restart at CURRENT price (where TP/SL was hit)
-        self.running = False  # Reset flag so start() doesn't exit early
-        print(f"[RESTART] {self.symbol}: Starting new cycle {self.state.cycle_count}")
-        await self.start()
+        for ticket in set_tickets:
+            if self._close_position(ticket):
+                closed_count += 1
+                self._remove_ticket_from_all_levels(ticket)
+                if self.repository is not None:
+                    await self.repository.delete_ticket(ticket)
+
+        if closed_count:
+            self.state.total_positions = max(0, self.state.total_positions - closed_count)
+
+        # Fresh set state and immediate restart at current market price.
+        new_set_state = SetState(set_index=set_index)
+        self.state.sets[set_index] = new_set_state
+        await self._open_center_pair_for_set(set_index, current_price, log_start=True)
+        self._sync_legacy_state_from_set(set_index)
+        await self.save_state()
 
 
     def _reset_state(self):
@@ -1237,6 +1076,8 @@ class GridBounceStrategyEngine:
         cycle = self.state.cycle_count
         self.state = StrategyState()
         self.state.cycle_count = cycle
+        self._position_drop_detected_set_indices.clear()
+        self.orphan_tickets = []
 
 
     #Helper methods for order execution, position closing, and tracking management (SAME as old logic but adapted for new state structure)
@@ -1261,12 +1102,15 @@ class GridBounceStrategyEngine:
         """
         info = self.state.ticket_map.get(ticket)
         group_id = info.get('split_group_id') if info else None
+        set_index = info.get('set_index', 0) if info else 0
+        set_state = self._ensure_set_state(set_index) if self.state.sets else None
 
         # Remove from any level containers
-        if self.state.grid_level_1 and ticket in self.state.grid_level_1.positions:
-            del self.state.grid_level_1.positions[ticket]
-        if self.state.grid_level_2 and ticket in self.state.grid_level_2.positions:
-            del self.state.grid_level_2.positions[ticket]
+        if set_state:
+            if set_state.grid_level_1 and ticket in set_state.grid_level_1.positions:
+                del set_state.grid_level_1.positions[ticket]
+            if set_state.grid_level_2 and ticket in set_state.grid_level_2.positions:
+                del set_state.grid_level_2.positions[ticket]
 
         # Remove from ticket tracking
         if ticket in self.state.ticket_map:
@@ -1287,8 +1131,8 @@ class GridBounceStrategyEngine:
                 # last ticket removed -> decrement once for pair groups
                 if info:
                     position_type = info.get('position_type', 'pair')
-                    if position_type == 'pair' and self.state.position_counter > 0:
-                        self.state.position_counter -= 1
+                    if position_type == 'pair' and set_state and set_state.position_counter > 0:
+                        set_state.position_counter -= 1
                 # cleanup map
                 if group_id in self.state.split_group_map:
                     del self.state.split_group_map[group_id]
@@ -1305,8 +1149,8 @@ class GridBounceStrategyEngine:
             if leg in {"CenterBuy", "CenterSell"}:
                 pass  # Do nothing
             # Pair positions decrement position_counter
-            elif position_type == "pair" and self.state.position_counter > 0:
-                self.state.position_counter -= 1
+            elif position_type == "pair" and set_state and set_state.position_counter > 0:
+                set_state.position_counter -= 1
             # Custom single positions DO NOT decrement position_counter (per user requirement)
 
 
@@ -1539,15 +1383,6 @@ class GridBounceStrategyEngine:
 
         return results
 
-    def _get_nearest_level_price(self, mid: float) -> float:
-        if self.state.grid_level_2 and self.state.grid_level_2.active:
-            p1 = self.state.grid_level_1.price if self.state.grid_level_1 else self.state.center_price
-            p2 = self.state.grid_level_2.price
-            return p1 if abs(mid - p1) < abs(mid - p2) else p2
-        elif self.state.grid_level_1:
-            return self.state.grid_level_1.price
-        return self.state.center_price
-
     def _adjusted_distance(self, price_a: float, price_b: float) -> float:
         return max(0.0, abs(price_a - price_b) - (self._last_known_spread / 2))
 
@@ -1555,21 +1390,37 @@ class GridBounceStrategyEngine:
         factor = self.volatility_tolerance_factor
         if factor is None:
             return
-        if self.state.phase != "TWO_LEVELS":
-            return
-
         mid = (ask + bid) / 2
-        nearest_level_price = self._get_nearest_level_price(mid)
-        adjusted_distance = self._adjusted_distance(mid, nearest_level_price)
         threshold = float(self.grid_distance) * float(factor)
+        reset_sets: List[int] = []
 
-        if adjusted_distance >= threshold:
-            self.activity_log.log_info(
-                f"VOLATILITY RESET: Adjusted distance {adjusted_distance:.5f} from nearest level {nearest_level_price:.5f} "
-                f"(spread deduction: {self._last_known_spread / 2:.5f}) exceeds {factor}x threshold {threshold:.5f}. Triggering nuclear reset."
-            )
-            self._position_drop_detected = False
-            await self._nuclear_reset_and_restart("VOLATILITY_RESET", self.state.realized_pnl)
+        for set_index, set_state in enumerate(self.state.sets):
+            if set_state.phase not in {"SINGLE_LEVEL", "TWO_LEVELS"}:
+                continue
+
+            nearest_level_price = self._get_nearest_level_price_for_set(set_index, mid)
+            adjusted_distance = self._adjusted_distance(mid, nearest_level_price)
+            if adjusted_distance >= threshold:
+                self.activity_log.log_info(
+                    f"VOLATILITY RESET: Adjusted distance {adjusted_distance:.5f} from nearest level {nearest_level_price:.5f} "
+                    f"(spread deduction: {self._last_known_spread / 2:.5f}) exceeds {factor}x threshold {threshold:.5f}. Triggering nuclear reset.",
+                    set_index=set_index,
+                )
+                reset_sets.append(set_index)
+
+        for set_index in reset_sets:
+            self._position_drop_detected_set_indices.discard(set_index)
+            await self._nuclear_reset_set(set_index, "VOLATILITY_RESET")
+
+    def _get_nearest_level_price_for_set(self, set_index: int, mid: float) -> float:
+        set_state = self._ensure_set_state(set_index)
+        if set_state.grid_level_2 and set_state.grid_level_2.active:
+            p1 = set_state.grid_level_1.price if set_state.grid_level_1 else self.state.center_price
+            p2 = set_state.grid_level_2.price
+            return p1 if abs(mid - p1) < abs(mid - p2) else p2
+        if set_state.grid_level_1:
+            return set_state.grid_level_1.price
+        return self.state.center_price
 
     async def _add_tp_sl_to_position(self, ticket: int, direction: str, entry_price: float) -> Tuple[bool, float, float]:
         """
@@ -1618,12 +1469,15 @@ class GridBounceStrategyEngine:
 
         grid_level = None
         position_type = "pair"
-        if self.state.grid_level_1 and ticket in self.state.grid_level_1.positions:
-            grid_level = self.state.grid_level_1
+        ticket_info = self.state.ticket_map.get(ticket, {})
+        set_index = ticket_info.get("set_index", 0)
+        set_state = self._ensure_set_state(set_index)
+        if set_state.grid_level_1 and ticket in set_state.grid_level_1.positions:
+            grid_level = set_state.grid_level_1
             position_type = grid_level.positions[ticket].get("position_type", "pair")
-        elif self.state.grid_level_2 and ticket in self.state.grid_level_2.positions:
-            grid_level = self.state.grid_level_2
-            position_type = self.state.grid_level_2.positions[ticket].get("position_type", "pair")
+        elif set_state.grid_level_2 and ticket in set_state.grid_level_2.positions:
+            grid_level = set_state.grid_level_2
+            position_type = set_state.grid_level_2.positions[ticket].get("position_type", "pair")
 
         result = mt5.order_send(request)
         if result and result.retcode == mt5.TRADE_RETCODE_DONE:
@@ -1785,7 +1639,7 @@ class GridBounceStrategyEngine:
             self._remove_ticket_from_all_levels(ticket)
             self.state.total_positions -= 1
             if triggers_reset:
-                self._position_drop_detected = True
+                self._position_drop_detected_set_indices.add(info.get('set_index', 0))
 
         if positions_to_close:
             await self.save_state()
@@ -1796,16 +1650,42 @@ class GridBounceStrategyEngine:
             self.repository = Repository(self.symbol)
             await self.repository.initialize()
 
+        def _serialize_grid_level(level: Optional[GridLevel]) -> Dict[str, Any]:
+            if not level:
+                return {}
+            return {
+                "price": level.price,
+                "active": level.active,
+                "reference_buy_tp": level.reference_buy_tp,
+                "reference_buy_sl": level.reference_buy_sl,
+                "reference_sell_tp": level.reference_sell_tp,
+                "reference_sell_sl": level.reference_sell_sl,
+                "reference_custom_buy_tp": level.reference_custom_buy_tp,
+                "reference_custom_buy_sl": level.reference_custom_buy_sl,
+                "reference_custom_sell_tp": level.reference_custom_sell_tp,
+                "reference_custom_sell_sl": level.reference_custom_sell_sl,
+                "positions": level.positions,
+            }
+
+        serialized_sets = []
+        for set_state in self.state.sets:
+            serialized_sets.append({
+                "set_index": set_state.set_index,
+                "phase": set_state.phase,
+                "grid_level_1_price": set_state.grid_level_1.price if set_state.grid_level_1 else 0.0,
+                "grid_level_2_price": set_state.grid_level_2.price if set_state.grid_level_2 else 0.0,
+                "position_counter": set_state.position_counter,
+                "last_move_direction": set_state.last_move_direction,
+                "is_final_group_reached": set_state.is_final_group_reached,
+            })
+
         metadata = json.dumps(
             {
                 "phase": self.state.phase,
                 "center_price": self.state.center_price,
-                "grid_level_1": self.state.grid_level_1.price if self.state.grid_level_1 else 0.0,
-                "grid_level_2": self.state.grid_level_2.price if self.state.grid_level_2 else 0.0,
-                "position_counter": self.state.position_counter,
                 "total_positions": self.state.total_positions,
-                "last_move_direction": self.state.last_move_direction,
                 "realized_pnl": self.state.realized_pnl,
+                "sets": serialized_sets,
             }
         )
 
@@ -1814,9 +1694,133 @@ class GridBounceStrategyEngine:
             center_price=self.state.center_price,
             iteration=self.state.cycle_count,
             cycle_id=self.state.cycle_count,
-            anchor_price=self.state.grid_level_1.price if self.state.grid_level_1 else 0.0,
+            anchor_price=self.state.center_price,
             metadata=metadata,
         )
+
+    async def reconcile_on_startup(self) -> dict:
+        """Best-effort reconcile of DB state against live MT5 positions."""
+        if self.repository is None:
+            self.repository = Repository(self.symbol)
+            await self.repository.initialize()
+
+        summary = {
+            "recovered_sets": [],
+            "offline_closures": [],
+            "orphans": [],
+        }
+
+        state_row = await self.repository.get_state()
+        metadata = {}
+        if state_row.get("metadata"):
+            try:
+                metadata = json.loads(state_row["metadata"])
+            except Exception:
+                metadata = {}
+
+        self._reset_state()
+        self.state.center_price = float(metadata.get("center_price", state_row.get("center_price", 0.0) or 0.0))
+        self.state.phase = metadata.get("phase", state_row.get("phase", "IDLE"))
+        self.state.cycle_count = int(state_row.get("cycle_id", 0) or 0)
+        self.state.realized_pnl = float(metadata.get("realized_pnl", 0.0) or 0.0)
+        self.state.total_positions = 0
+
+        set_entries = metadata.get("sets", []) if isinstance(metadata.get("sets", []), list) else []
+        for entry in set_entries:
+            if not isinstance(entry, dict):
+                continue
+            set_index = int(entry.get("set_index", 0))
+            set_state = self._ensure_set_state(set_index)
+            set_state.phase = entry.get("phase", "IDLE")
+            set_state.position_counter = int(entry.get("position_counter", 0) or 0)
+            set_state.last_move_direction = entry.get("last_move_direction", "")
+            set_state.is_final_group_reached = bool(entry.get("is_final_group_reached", False))
+            level_1_price = float(entry.get("grid_level_1_price", 0.0) or 0.0)
+            level_2_price = float(entry.get("grid_level_2_price", 0.0) or 0.0)
+            set_state.grid_level_1 = GridLevel(price=level_1_price, active=level_1_price > 0)
+            set_state.grid_level_2 = GridLevel(price=level_2_price, active=level_2_price > 0) if level_2_price > 0 else None
+
+        db_ticket_map = await self.repository.get_ticket_map()
+        live_positions = mt5.positions_get(symbol=self.symbol) or []
+        live_by_ticket = {pos.ticket: pos for pos in live_positions}
+
+        offline_pair_reset_sets = set()
+
+        for ticket, row in db_ticket_map.items():
+            set_index, pair_index, grid_level_index, leg, entry_price, tp_price, sl_price = row
+            if ticket in live_by_ticket:
+                set_state = self._ensure_set_state(set_index)
+                if grid_level_index not in (1, 2):
+                    grid_level_index = 1 if set_state.grid_level_1 else 2 if set_state.grid_level_2 else 1
+                grid_level = set_state.grid_level_1 if grid_level_index == 1 else set_state.grid_level_2
+                if grid_level is None:
+                    if grid_level_index == 2:
+                        grid_level = GridLevel(price=self.state.center_price, active=True)
+                        set_state.grid_level_2 = grid_level
+                    else:
+                        grid_level = GridLevel(price=self.state.center_price, active=True)
+                        set_state.grid_level_1 = grid_level
+
+                info = {
+                    "leg": leg,
+                    "direction": live_by_ticket[ticket].type == mt5.ORDER_TYPE_BUY and "buy" or "sell",
+                    "entry": entry_price,
+                    "tp": tp_price,
+                    "sl": sl_price,
+                    "lot": getattr(live_by_ticket[ticket], "volume", 0.0),
+                    "position_type": "pair" if "single" not in leg.lower() else "single_custom",
+                    "set_index": set_index,
+                }
+                grid_level.positions[ticket] = info
+                self.state.ticket_map[ticket] = info
+                self._init_touch_flags(ticket)
+                self.state.total_positions += 1
+                if set_index not in summary["recovered_sets"]:
+                    summary["recovered_sets"].append(set_index)
+                await self.repository.save_ticket(
+                    ticket=ticket,
+                    cycle_id=self.state.cycle_count,
+                    pair_index=pair_index,
+                    leg=leg,
+                    trade_count=0,
+                    entry_price=entry_price,
+                    tp_price=tp_price,
+                    sl_price=sl_price,
+                    set_index=set_index,
+                    grid_level=grid_level_index,
+                )
+            else:
+                set_index = int(set_index)
+                summary["offline_closures"].append({"ticket": ticket, "leg": leg, "set_index": set_index})
+                self.activity_log.log_info(
+                    f"[Set {set_index + 1}] Ticket {ticket} ({leg}) not found on restart — assumed closed while offline, treating as SL-equivalent"
+                )
+                self.activity_log.log_info(
+                    "PnL not recoverable for offline closure — running total for this cycle is incomplete",
+                    set_index=set_index,
+                )
+                if self.repository is not None:
+                    await self.repository.delete_ticket(ticket)
+                if "single" not in leg.lower():
+                    offline_pair_reset_sets.add(set_index)
+
+        for set_index in sorted(offline_pair_reset_sets):
+            await self._nuclear_reset_set(set_index, "OFFLINE_RECOVERY")
+            if set_index not in summary["recovered_sets"]:
+                summary["recovered_sets"].append(set_index)
+
+        for pos in live_positions:
+            if pos.ticket not in db_ticket_map:
+                self.orphan_tickets.append(pos.ticket)
+                summary["orphans"].append(pos.ticket)
+                self.activity_log.log_info(
+                    f"[ORPHAN] Ticket {pos.ticket} on {self.symbol} open in MT5 but untracked after recovery — not managed by any set. Manual review needed."
+                )
+
+        self.running = bool(live_positions or offline_pair_reset_sets)
+        self.activity_log.log_info(f"[RECOVERY] {summary}")
+        await self.save_state()
+        return summary
 
 
     #Graceful stop and position terminate (same as old logic)
@@ -1859,6 +1863,8 @@ class GridBounceStrategyEngine:
         
         print(f"[TERMINATE] {self.symbol}: Closed {closed_count} positions.")
         self.activity_log.log_info(f"TERMINATE: Closed {closed_count} positions")
+        if self.repository is not None:
+            await self.repository.clear_ticket_map()
         
         # Full reset
         self._reset_state()
@@ -1884,19 +1890,32 @@ class GridBounceStrategyEngine:
         PRESERVED FROM ORIGINAL (with field updates)
         Return status dict for API polling
         """
+        per_set = []
+        for set_state in self.state.sets:
+            level_1_open = len(set_state.grid_level_1.positions) if set_state.grid_level_1 else 0
+            level_2_open = len(set_state.grid_level_2.positions) if set_state.grid_level_2 else 0
+            per_set.append({
+                "set_index": set_state.set_index,
+                "phase": set_state.phase,
+                "open_positions": level_1_open + level_2_open,
+                "position_counter": set_state.position_counter,
+                "last_move_direction": set_state.last_move_direction,
+                "is_final_group_reached": set_state.is_final_group_reached,
+                "grid_level_1_price": set_state.grid_level_1.price if set_state.grid_level_1 else 0,
+                "grid_level_2_price": set_state.grid_level_2.price if set_state.grid_level_2 else 0,
+            })
         return {
             "running": self.running,
             "phase": self.state.phase,
             "cycle_count": self.state.cycle_count,
             "center_price": self.state.center_price,
-            "grid_level_1_price": self.state.grid_level_1.price if self.state.grid_level_1 else 0,
-            "grid_level_2_price": self.state.grid_level_2.price if self.state.grid_level_2 else 0,
             "open_positions": self.state.total_positions,
-            "position_counter": self.state.position_counter,
             "max_positions": self.max_positions,
             "realized_pnl": self.state.realized_pnl,
             "graceful_stop": self.graceful_stop,
             "is_resetting": self.state.phase == "RESETTING",
             "step": self.state.cycle_count,
             "iteration": self.state.cycle_count,
+            "sets": per_set,
+            "orphan_tickets": list(self.orphan_tickets),
         }

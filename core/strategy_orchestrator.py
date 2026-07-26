@@ -64,6 +64,13 @@ class StrategyOrchestrator:
 
         self.active_symbols = enabled_symbols
 
+    async def reconcile_strategies_on_startup(self):
+        """Run a one-time startup reconciliation for every instantiated strategy."""
+        summaries = {}
+        for symbol, strategy in self.strategies.items():
+            summaries[symbol] = await strategy.reconcile_on_startup()
+        return summaries
+
     async def start(self):
         """Start all enabled strategies"""
         self.update_strategies()

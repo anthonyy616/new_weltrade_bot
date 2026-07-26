@@ -26,6 +26,8 @@ def get_default_symbol_config() -> Dict[str, Any]:
           "grid_distance": 50.0,       # Pips between grid levels
           "tp_pips": 150.0,            # TP distance for all positions (global)
           "sl_pips": 200.0,            # SL distance for all positions (global)
+          "center_buy_lot": 0.01,
+          "center_sell_lot": 0.01,
           # Second-entry (directional single) TP/SL overrides (per-symbol, global)
           "second_entry_buy_tp_pips": 150.0,
           "second_entry_buy_sl_pips": 200.0,
@@ -36,15 +38,17 @@ def get_default_symbol_config() -> Dict[str, Any]:
           # Sets configuration: array of {lot sizes, max_positions} per set
           "sets_config": [
               {
-                  "pair_buy_lots": [0.01, 0.01],
-                  "pair_sell_lots": [0.01, 0.01],
+                  "pair_buy_lots": [0.01],
+                  "pair_sell_lots": [0.01],
                   "single_lots": [0.01],
                   "max_positions": 3,
               }
           ],
           # Legacy fields (kept for backward compat, not used if sets_config exists)
-          "pair_buy_lots": [0.01, 0.01],
-          "pair_sell_lots": [0.01, 0.01],
+          "center_buy_lot": 0.01,
+          "center_sell_lot": 0.01,
+          "pair_buy_lots": [0.01],
+          "pair_sell_lots": [0.01],
           "single_lots": [0.01],
           "max_positions": 3,          # Effective positions; must be multiple of 3 (3..60)
       }
@@ -131,12 +135,14 @@ class ConfigManager:
                 # Migrate lot sizes (old format was center_lot_first, etc.)
                 max_pos = sym_cfg["max_positions"]
                 groups = max(1, int(max_pos) // 3)
-                # pair_* arrays: center + groups. single_* arrays: groups.
-                base_pair_buy = old_config.get("pair_buy_lot", 0.01)
-                base_pair_sell = old_config.get("pair_sell_lot", 0.01)
+                # pair_* arrays now store groups only; center lots are separate.
+                base_pair_buy = old_config.get("center_buy_lot", old_config.get("pair_buy_lot", 0.01))
+                base_pair_sell = old_config.get("center_sell_lot", old_config.get("pair_sell_lot", 0.01))
                 base_single = old_config.get("single_lot", 0.01)
-                sym_cfg["pair_buy_lots"] = [float(base_pair_buy)] * (groups + 1)
-                sym_cfg["pair_sell_lots"] = [float(base_pair_sell)] * (groups + 1)
+                sym_cfg["center_buy_lot"] = float(base_pair_buy)
+                sym_cfg["center_sell_lot"] = float(base_pair_sell)
+                sym_cfg["pair_buy_lots"] = [float(base_pair_buy)] * groups
+                sym_cfg["pair_sell_lots"] = [float(base_pair_sell)] * groups
                 sym_cfg["single_lots"] = [float(base_single)] * groups
                 
         return new_config
@@ -210,6 +216,35 @@ class ConfigManager:
                     num_sets = int(sym_cfg.get("sets", self.config["symbols"][symbol].get("sets", 1)))
                     num_sets = max(1, min(10, num_sets))  # Clamp 1-10 sets
                     self.config["symbols"][symbol]["sets"] = num_sets
+
+                    center_buy_lot = sym_cfg.get(
+                        "center_buy_lot",
+                        self.config["symbols"][symbol].get(
+                            "center_buy_lot",
+                            sym_cfg.get(
+                                "pair_buy_lot",
+                                (sym_cfg.get("pair_buy_lots", [0.01])[0] if isinstance(sym_cfg.get("pair_buy_lots", [0.01]), list) else 0.01),
+                            ),
+                        ),
+                    )
+                    center_sell_lot = sym_cfg.get(
+                        "center_sell_lot",
+                        self.config["symbols"][symbol].get(
+                            "center_sell_lot",
+                            sym_cfg.get(
+                                "pair_sell_lot",
+                                (sym_cfg.get("pair_sell_lots", [0.01])[0] if isinstance(sym_cfg.get("pair_sell_lots", [0.01]), list) else 0.01),
+                            ),
+                        ),
+                    )
+                    try:
+                        self.config["symbols"][symbol]["center_buy_lot"] = max(0.01, float(center_buy_lot))
+                    except Exception:
+                        self.config["symbols"][symbol]["center_buy_lot"] = 0.01
+                    try:
+                        self.config["symbols"][symbol]["center_sell_lot"] = max(0.01, float(center_sell_lot))
+                    except Exception:
+                        self.config["symbols"][symbol]["center_sell_lot"] = 0.01
                     
                     # Initialize or rebuild sets_config
                     if "sets_config" in sym_cfg and isinstance(sym_cfg["sets_config"], list):
@@ -251,7 +286,18 @@ class ConfigManager:
                         set_cfg["max_positions"] = max_pos
                         
                         groups = max(1, max_pos // 3)
-                        pair_len = groups + 1
+                        pair_len = groups
+
+                        center_buy = set_cfg.get("center_buy_lot", set_cfg.get("pair_buy_lot", 0.01))
+                        center_sell = set_cfg.get("center_sell_lot", set_cfg.get("pair_sell_lot", 0.01))
+                        try:
+                            set_cfg["center_buy_lot"] = max(0.01, float(center_buy))
+                        except Exception:
+                            set_cfg["center_buy_lot"] = 0.01
+                        try:
+                            set_cfg["center_sell_lot"] = max(0.01, float(center_sell))
+                        except Exception:
+                            set_cfg["center_sell_lot"] = 0.01
                         
                         # Normalize pair_buy_lots
                         if "pair_buy_lots" in set_cfg and isinstance(set_cfg["pair_buy_lots"], list):
@@ -285,6 +331,8 @@ class ConfigManager:
                     # Keep legacy fields in sync with first set for backward compatibility
                     if sets_config:
                         first_set = sets_config[0]
+                        self.config["symbols"][symbol]["center_buy_lot"] = first_set.get("center_buy_lot", first_set["pair_buy_lots"][0] if first_set.get("pair_buy_lots") else 0.01)
+                        self.config["symbols"][symbol]["center_sell_lot"] = first_set.get("center_sell_lot", first_set["pair_sell_lots"][0] if first_set.get("pair_sell_lots") else 0.01)
                         self.config["symbols"][symbol]["pair_buy_lots"] = first_set["pair_buy_lots"][:]
                         self.config["symbols"][symbol]["pair_sell_lots"] = first_set["pair_sell_lots"][:]
                         self.config["symbols"][symbol]["single_lots"] = first_set["single_lots"][:]

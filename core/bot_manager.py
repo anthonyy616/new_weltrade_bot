@@ -24,6 +24,9 @@ class BotManager:
         # Initialize Strategy Orchestrator with user_id for session logging
         orchestrator = StrategyOrchestrator(config_manager, user_id=user_id)
         
+        # Reconcile live MT5 positions against persisted state before any ticker sync.
+        await orchestrator.reconcile_strategies_on_startup()
+
         # Start Ticker (Passive) - Actually for Orchestrator this syncs strategies
         await orchestrator.start_ticker()
         

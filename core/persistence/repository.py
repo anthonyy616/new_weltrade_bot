@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS ticket_map (
     symbol TEXT NOT NULL,
     cycle_id INTEGER DEFAULT 0,
     pair_index INTEGER DEFAULT 0,
+    set_index INTEGER DEFAULT 0,
+    grid_level INTEGER DEFAULT 0,
     leg TEXT DEFAULT '',
     trade_count INTEGER DEFAULT 0,
     entry_price REAL DEFAULT 0.0,
@@ -156,6 +158,17 @@ class Repository:
             try:
                 await self.db.execute(sql)
                 print(f"[REPOS] Migration: added '{label}' column to 'symbol_state'")
+            except Exception:
+                pass
+
+        # MIGRATION: Add set-aware ownership columns to ticket_map if missing
+        for sql, label in [
+            ("ALTER TABLE ticket_map ADD COLUMN set_index INTEGER DEFAULT 0", "set_index"),
+            ("ALTER TABLE ticket_map ADD COLUMN grid_level INTEGER DEFAULT 0", "grid_level"),
+        ]:
+            try:
+                await self.db.execute(sql)
+                print(f"[REPOS] Migration: added '{label}' column to 'ticket_map'")
             except Exception:
                 pass
             
@@ -270,37 +283,40 @@ class Repository:
 
     async def save_ticket(self, ticket: int, cycle_id: int, pair_index: int,
                           leg: str, trade_count: int = 0,
-                          entry_price: float = 0.0, tp_price: float = 0.0, sl_price: float = 0.0):
+                          entry_price: float = 0.0, tp_price: float = 0.0, sl_price: float = 0.0,
+                          set_index: int = 0, grid_level: int = 0):
         """Save ticket → (pair, leg, prices) mapping for deterministic TP/SL detection."""
         await self._conn().execute(
             """
-            INSERT INTO ticket_map (ticket, symbol, cycle_id, pair_index, leg, trade_count, entry_price, tp_price, sl_price)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO ticket_map (ticket, symbol, cycle_id, pair_index, set_index, grid_level, leg, trade_count, entry_price, tp_price, sl_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ticket) DO UPDATE SET
                 cycle_id=excluded.cycle_id,
                 pair_index=excluded.pair_index,
+                set_index=excluded.set_index,
+                grid_level=excluded.grid_level,
                 leg=excluded.leg,
                 trade_count=excluded.trade_count,
                 entry_price=excluded.entry_price,
                 tp_price=excluded.tp_price,
                 sl_price=excluded.sl_price
             """,
-            (ticket, self.symbol, cycle_id, pair_index, leg, trade_count, entry_price, tp_price, sl_price)
+            (ticket, self.symbol, cycle_id, pair_index, set_index, grid_level, leg, trade_count, entry_price, tp_price, sl_price)
         )
         await self._conn().commit()
 
-    async def get_ticket_map(self) -> Dict[int, Tuple[int, str, float, float, float]]:
+    async def get_ticket_map(self) -> Dict[int, Tuple[int, int, int, str, float, float, float]]:
         """Load all ticket mappings for this symbol.
 
         Returns:
-            Dict[ticket, (pair_index, leg, entry_price, tp_price, sl_price)]
+            Dict[ticket, (set_index, pair_index, grid_level, leg, entry_price, tp_price, sl_price)]
         """
         async with self._conn().execute(
-            "SELECT ticket, pair_index, leg, entry_price, tp_price, sl_price FROM ticket_map WHERE symbol = ?",
+            "SELECT ticket, set_index, pair_index, grid_level, leg, entry_price, tp_price, sl_price FROM ticket_map WHERE symbol = ?",
             (self.symbol,)
         ) as cursor:
             rows = await cursor.fetchall()
-            return {row['ticket']: (row['pair_index'], row['leg'], row['entry_price'], row['tp_price'], row['sl_price']) for row in rows}
+            return {row['ticket']: (row['set_index'], row['pair_index'], row['grid_level'], row['leg'], row['entry_price'], row['tp_price'], row['sl_price']) for row in rows}
 
     async def delete_ticket(self, ticket: int):
         """Remove a ticket from the map (on position close)."""

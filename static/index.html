@@ -554,10 +554,12 @@
                     const suffix = `_set_${s}`;
                     const groups = Math.max(1, parseInt(document.getElementById(`maxpos_${safeId}${suffix}`)?.value) || 1);
 
+                    const centerBuy = parseFloat(document.getElementById(`centerbuy_${safeId}${suffix}`)?.value) || 0;
+                    const centerSell = parseFloat(document.getElementById(`centersell_${safeId}${suffix}`)?.value) || 0;
                     const pairBuy = [];
                     const pairSell = [];
                     const single = [];
-                    for (let p = 1; p <= groups + 1; p++) {
+                    for (let p = 1; p <= groups; p++) {
                         const pb = parseFloat(document.getElementById(`pairbuy_${safeId}${suffix}_${p}`)?.value) || 0;
                         const ps = parseFloat(document.getElementById(`pairsell_${safeId}${suffix}_${p}`)?.value) || 0;
                         pairBuy.push(pb);
@@ -567,16 +569,16 @@
                         const sVal = parseFloat(document.getElementById(`single_${safeId}${suffix}_${g}`)?.value) || 0;
                         single.push(sVal);
                     }
-                    sets.push({ pairBuy, pairSell, single, groups, max_positions: groups * 3 });
+                    sets.push({ centerBuy, centerSell, pairBuy, pairSell, single, groups, max_positions: groups * 3 });
                 }
 
                 // Simulation sequence
                 // Step0: center pair
                 if (sets.length === 0) return;
-                let cumulativeOpen = (sets[0].pairBuy[0] || 0) + (sets[0].pairSell[0] || 0);
+                let cumulativeOpen = (sets[0].centerBuy || 0) + (sets[0].centerSell || 0);
                 if (cumulativeOpen > limit) {
-                    const pbEl = document.getElementById(`pairbuy_${safeId}_set_0_1`);
-                    const psEl = document.getElementById(`pairsell_${safeId}_set_0_1`);
+                    const pbEl = document.getElementById(`centerbuy_${safeId}_set_0`);
+                    const psEl = document.getElementById(`centersell_${safeId}_set_0`);
                     const valPb = parseFloat(pbEl?.value) || 0;
                     const valPs = parseFloat(psEl?.value) || 0;
                     const fieldEl = valPb >= valPs ? pbEl : psEl;
@@ -593,21 +595,15 @@
                     const st = sets[sIdx];
                     const groups = st.groups;
                     for (let g = 0; g < groups; g++) {
-                        const pairStageIdx = Math.min(g + 1, st.pairBuy.length - 1);
+                        const pairStageIdx = Math.min(g, st.pairBuy.length - 1);
                         const pb = st.pairBuy[pairStageIdx] || 0;
                         const ps = st.pairSell[pairStageIdx] || 0;
                         const singleLot = st.single[g] || 0;
 
                         // Determine closedLot approximation
                         let closedLot = 0;
-                        if (sIdx === 0 && g === 0) {
-                            // First bounce: close center pair buy leg approximation
-                            closedLot = (sets[0].pairBuy[0] || 0);
-                        } else {
-                            // Subsequent bounces: approximate closed lot as previous stage pairBuy
-                            const prevIdx = Math.max(0, pairStageIdx - 1);
-                            closedLot = (st.pairBuy[prevIdx] || 0);
-                        }
+                        const prevIdx = Math.max(0, pairStageIdx - 1);
+                        closedLot = (sIdx === 0 && g === 0) ? (sets[0].centerBuy || 0) : (st.pairBuy[prevIdx] || 0);
 
                         // Accumulate: one closes, three open -> net change = -closedLot + pb + ps + singleLot
                         cumulativeOpen = cumulativeOpen - closedLot + pb + ps + singleLot;
@@ -841,18 +837,22 @@
                     const rawPairBuy = Array.isArray(setConfig.pair_buy_lots) ? setConfig.pair_buy_lots : (Array.isArray(symCfg.pair_buy_lots) ? symCfg.pair_buy_lots : [0.01]);
                     const rawPairSell = Array.isArray(setConfig.pair_sell_lots) ? setConfig.pair_sell_lots : (Array.isArray(symCfg.pair_sell_lots) ? symCfg.pair_sell_lots : [0.01]);
                     const rawSingle = Array.isArray(setConfig.single_lots) ? setConfig.single_lots : (Array.isArray(symCfg.single_lots) ? symCfg.single_lots : [0.01]);
+                    const centerBuy = setConfig.center_buy_lot ?? symCfg.center_buy_lot ?? rawPairBuy[0] ?? 0.01;
+                    const centerSell = setConfig.center_sell_lot ?? symCfg.center_sell_lot ?? rawPairSell[0] ?? 0.01;
 
                     const pairBuy = [...rawPairBuy];
                     const pairSell = [...rawPairSell];
                     const single = [...rawSingle];
 
-                    while (pairBuy.length < groups + 1) pairBuy.push(pairBuy[pairBuy.length - 1] ?? 0.01);
-                    while (pairSell.length < groups + 1) pairSell.push(pairSell[pairSell.length - 1] ?? 0.01);
+                    while (pairBuy.length < groups) pairBuy.push(pairBuy[pairBuy.length - 1] ?? 0.01);
+                    while (pairSell.length < groups) pairSell.push(pairSell[pairSell.length - 1] ?? 0.01);
                     while (single.length < groups) single.push(single[single.length - 1] ?? 0.01);
 
                     setsData.push({
-                        pair_buy_lots: pairBuy.slice(0, groups + 1),
-                        pair_sell_lots: pairSell.slice(0, groups + 1),
+                        center_buy_lot: centerBuy,
+                        center_sell_lot: centerSell,
+                        pair_buy_lots: pairBuy.slice(0, groups),
+                        pair_sell_lots: pairSell.slice(0, groups),
                         single_lots: single.slice(0, groups),
                         max_positions: effectiveMaxPos
                     });
@@ -982,8 +982,8 @@
             numSetsEl.value = String(Math.max(1, Math.min(10, numSets)));
             const primarySetData = lotInitialBySafeId[safeId]?.sets_data?.[0] || {
                 max_positions: 3,
-                pair_buy_lots: [0.01, 0.01],
-                pair_sell_lots: [0.01, 0.01],
+                pair_buy_lots: [0.01],
+                pair_sell_lots: [0.01],
                 single_lots: [0.01],
             };
 
@@ -1055,13 +1055,17 @@
 
             // Get initial values from sets_data for this specific set
             const primarySetData = lotInitialBySafeId[safeId]?.sets_data?.[0] || {
-                pair_buy_lots: [0.01, 0.01],
-                pair_sell_lots: [0.01, 0.01],
+                center_buy_lot: 0.01,
+                center_sell_lot: 0.01,
+                pair_buy_lots: [0.01],
+                pair_sell_lots: [0.01],
                 single_lots: [0.01],
             };
             const setData = lotInitialBySafeId[safeId]?.sets_data?.[setIdx] || {
-                pair_buy_lots: [...(primarySetData.pair_buy_lots || [0.01, 0.01])],
-                pair_sell_lots: [...(primarySetData.pair_sell_lots || [0.01, 0.01])],
+                center_buy_lot: primarySetData.center_buy_lot ?? 0.01,
+                center_sell_lot: primarySetData.center_sell_lot ?? 0.01,
+                pair_buy_lots: [...(primarySetData.pair_buy_lots || [0.01])],
+                pair_sell_lots: [...(primarySetData.pair_sell_lots || [0.01])],
                 single_lots: [...(primarySetData.single_lots || [0.01])],
             };
             const pairBuyInit = setData.pair_buy_lots || [0.01];
@@ -1089,55 +1093,60 @@
             }
 
             let html = '';
-            // Center pair first (1st Buy/Sell), then adaptive rows with Pair (2nd+) and Single (1st+)
-            const centerBuy = existingPairBuy[0] ?? pairBuyInit[0] ?? 0.01;
-            const centerSell = existingPairSell[0] ?? pairSellInit[0] ?? 0.01;
-            if (isPrimarySet) {
-                html += `
-                    <div class="flex flex-wrap items-center gap-2 mb-2">
-                        <div class="flex flex-col items-center bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-200 dark:border-blue-800/50">
-                            <label class="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">1st Buy</label>
-                            <input type="number" id="pairbuy_${safeId}${fieldSuffix}_1" step="0.01" value="${centerBuy}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
-                                class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div class="flex flex-col items-center bg-red-50 dark:bg-red-900/20 p-1.5 rounded border border-red-200 dark:border-red-800/50">
-                            <label class="text-[9px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">1st Sell</label>
-                            <input type="number" id="pairsell_${safeId}${fieldSuffix}_1" step="0.01" value="${centerSell}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
-                                class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none">
-                        </div>
+            // Center pair is always visible; the final group renders single-only.
+            const centerBuy = setData.center_buy_lot ?? existingPairBuy[0] ?? pairBuyInit[0] ?? 0.01;
+            const centerSell = setData.center_sell_lot ?? existingPairSell[0] ?? pairSellInit[0] ?? 0.01;
+
+            html += `
+                <div class="flex flex-wrap items-center gap-2 mb-2">
+                    <div class="flex flex-col items-center bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-200 dark:border-blue-800/50">
+                        <label class="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Centre Buy</label>
+                        <input type="number" id="centerbuy_${safeId}${fieldSuffix}" step="0.01" value="${centerBuy}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
+                            class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                     </div>
-                `;
-            } else {
-                // Secondary sets hide 1st pair fields in UI, but keep hidden values for payload compatibility.
-                html += `
-                    <input type="hidden" id="pairbuy_${safeId}${fieldSuffix}_1" value="${centerBuy}">
-                    <input type="hidden" id="pairsell_${safeId}${fieldSuffix}_1" value="${centerSell}">
-                `;
-            }
+                    <div class="flex flex-col items-center bg-red-50 dark:bg-red-900/20 p-1.5 rounded border border-red-200 dark:border-red-800/50">
+                        <label class="text-[9px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">Centre Sell</label>
+                        <input type="number" id="centersell_${safeId}${fieldSuffix}" step="0.01" value="${centerSell}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
+                            class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none">
+                    </div>
+                </div>
+            `;
 
-            for (let g = 0; g < groups; g++) {
-                const pairIdx = g + 1;
-                const inputIdx = g + 2;
-                const pbVal = existingPairBuy[inputIdx - 1] ?? pairBuyInit[pairIdx] ?? pairBuyInit[pairBuyInit.length - 1] ?? 0.01;
-                const psVal = existingPairSell[inputIdx - 1] ?? pairSellInit[pairIdx] ?? pairSellInit[pairSellInit.length - 1] ?? 0.01;
-                const sVal = existingSingle[g] ?? singleInit[g] ?? singleInit[singleInit.length - 1] ?? 0.01;
-                const singleLabel = `${ordinal(g + 1)} single`;
+            for (let g = 1; g <= groups; g++) {
+                const pairIdx = g - 1;
+                const pairFieldIdx = g;
+                const pairBuyVal = existingPairBuy[pairFieldIdx - 1] ?? pairBuyInit[pairIdx] ?? pairBuyInit[pairBuyInit.length - 1] ?? 0.01;
+                const pairSellVal = existingPairSell[pairFieldIdx - 1] ?? pairSellInit[pairIdx] ?? pairSellInit[pairSellInit.length - 1] ?? 0.01;
+                const singleVal = existingSingle[g - 1] ?? singleInit[g - 1] ?? singleInit[singleInit.length - 1] ?? 0.01;
+
+                if (g === groups) {
+                    html += `
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <div class="flex flex-col items-center bg-purple-50 dark:bg-purple-900/20 p-1.5 rounded border border-purple-200 dark:border-purple-800/50">
+                                <label class="text-[9px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-1">${ordinal(g)} single</label>
+                                <input type="number" id="single_${safeId}${fieldSuffix}_${g}" step="0.01" value="${singleVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
+                                    class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none">
+                            </div>
+                        </div>
+                    `;
+                    continue;
+                }
 
                 html += `
                     <div class="flex flex-wrap items-center gap-2 mb-2">
                         <div class="flex flex-col items-center bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-200 dark:border-blue-800/50">
-                            <label class="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">${ordinal(inputIdx)} Buy</label>
-                            <input type="number" id="pairbuy_${safeId}${fieldSuffix}_${inputIdx}" step="0.01" value="${pbVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
+                            <label class="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">${ordinal(g)} Buy</label>
+                            <input type="number" id="pairbuy_${safeId}${fieldSuffix}_${pairFieldIdx}" step="0.01" value="${pairBuyVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
                         </div>
                         <div class="flex flex-col items-center bg-red-50 dark:bg-red-900/20 p-1.5 rounded border border-red-200 dark:border-red-800/50">
-                            <label class="text-[9px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">${ordinal(inputIdx)} Sell</label>
-                            <input type="number" id="pairsell_${safeId}${fieldSuffix}_${inputIdx}" step="0.01" value="${psVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
+                            <label class="text-[9px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1">${ordinal(g)} Sell</label>
+                            <input type="number" id="pairsell_${safeId}${fieldSuffix}_${pairFieldIdx}" step="0.01" value="${pairSellVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none">
                         </div>
                         <div class="flex flex-col items-center bg-purple-50 dark:bg-purple-900/20 p-1.5 rounded border border-purple-200 dark:border-purple-800/50">
-                            <label class="text-[9px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-1">${singleLabel}</label>
-                            <input type="number" id="single_${safeId}${fieldSuffix}_${g + 1}" step="0.01" value="${sVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
+                            <label class="text-[9px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-1">${ordinal(g)} single</label>
+                            <input type="number" id="single_${safeId}${fieldSuffix}_${g}" step="0.01" value="${singleVal}" oninput="scheduleAutoSave(); setLastInteracted('${symbol}','${safeId}')"
                                 class="w-14 text-center p-1 text-sm rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 font-mono shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none">
                         </div>
                     </div>
@@ -1176,17 +1185,26 @@
                         const maxPosInput = Math.max(1, Math.min(20, maxPosInputRaw));
                         const maxPosVal = maxPosInput * 3;
                         const groups = maxPosInput;
+                        const centerBuy = parseFloat(document.getElementById(`centerbuy_${safeId}${fieldSuffix}`)?.value) || 0.01;
+                        const centerSell = parseFloat(document.getElementById(`centersell_${safeId}${fieldSuffix}`)?.value) || 0.01;
                         const pairBuyArr = [];
                         const pairSellArr = [];
                         const singleArr = [];
-                        for (let p = 1; p <= groups + 1; p++) {
+                        for (let p = 1; p <= groups; p++) {
                             pairBuyArr.push(parseFloat(document.getElementById(`pairbuy_${safeId}${fieldSuffix}_${p}`)?.value) || 0.01);
                             pairSellArr.push(parseFloat(document.getElementById(`pairsell_${safeId}${fieldSuffix}_${p}`)?.value) || 0.01);
                         }
-                        for (let g = 0; g < groups; g++) {
-                            singleArr.push(parseFloat(document.getElementById(`single_${safeId}${fieldSuffix}_${g + 1}`)?.value) || 0.01);
+                        for (let g = 1; g <= groups; g++) {
+                            singleArr.push(parseFloat(document.getElementById(`single_${safeId}${fieldSuffix}_${g}`)?.value) || 0.01);
                         }
-                        setsConfig.push({ pair_buy_lots: pairBuyArr, pair_sell_lots: pairSellArr, single_lots: singleArr, max_positions: maxPosVal });
+                        setsConfig.push({
+                            center_buy_lot: centerBuy,
+                            center_sell_lot: centerSell,
+                            pair_buy_lots: pairBuyArr,
+                            pair_sell_lots: pairSellArr,
+                            single_lots: singleArr,
+                            max_positions: maxPosVal
+                        });
                     }
                     payload.symbols[symbol] = {
                         enabled: true,
@@ -1339,6 +1357,8 @@
 
         function cloneSetData(setData) {
             return {
+                center_buy_lot: setData?.center_buy_lot,
+                center_sell_lot: setData?.center_sell_lot,
                 pair_buy_lots: Array.isArray(setData?.pair_buy_lots) ? [...setData.pair_buy_lots] : [],
                 pair_sell_lots: Array.isArray(setData?.pair_sell_lots) ? [...setData.pair_sell_lots] : [],
                 single_lots: Array.isArray(setData?.single_lots) ? [...setData.single_lots] : [],
@@ -1366,6 +1386,10 @@
                 Array.isArray(setData.pair_sell_lots) ? setData.pair_sell_lots.length : 0,
                 Array.isArray(setData.single_lots) ? setData.single_lots.length : 0
             );
+            const centerBuy = document.getElementById(`centerbuy_${targetSafeId}${suffix}`);
+            const centerSell = document.getElementById(`centersell_${targetSafeId}${suffix}`);
+            if (centerBuy && setData.center_buy_lot !== undefined) centerBuy.value = setData.center_buy_lot;
+            if (centerSell && setData.center_sell_lot !== undefined) centerSell.value = setData.center_sell_lot;
             for (let i = 1; i <= fieldCount; i++) {
                 const pairBuy = document.getElementById(`pairbuy_${targetSafeId}${suffix}_${i}`);
                 const pairSell = document.getElementById(`pairsell_${targetSafeId}${suffix}_${i}`);
