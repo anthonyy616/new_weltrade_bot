@@ -959,26 +959,119 @@ class GridBounceStrategyEngine:
             new_tp = upper_anchor if direction == 'buy' else lower_anchor
             new_sl = lower_anchor if direction == 'buy' else upper_anchor
 
-            request = {
-                "action": mt5.TRADE_ACTION_SLTP,
-                "symbol": self.symbol,
-                "position": ticket,
-                "tp": float(new_tp),
-                "sl": float(new_sl),
-            }
-            result = mt5.order_send(request)
-            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-                info['tp'] = new_tp
-                info['sl'] = new_sl
-                for level in [self.state.grid_level_1, self.state.grid_level_2]:
-                    if level and ticket in level.positions:
-                        level.positions[ticket]['tp'] = new_tp
-                        level.positions[ticket]['sl'] = new_sl
+            await self._align_position_tp_sl(
+                ticket,
+                direction,
+                float(new_tp),
+                float(new_sl),
+                None,
+                info.get('position_type', 'pair'),
+                has_virtual_stops=True,
+            )
+
+    async def _align_position_tp_sl(
+        self,
+        ticket: int,
+        direction: str,
+        tp: float,
+        sl: float,
+        grid_level: Optional[GridLevel],
+        position_type: str,
+        has_virtual_stops: bool = False,
+    ) -> Tuple[float, float, bool]:
+        """
+        Apply TP/SL to an existing position and retry once if MT5 rejects the stop levels.
+
+        Returns the TP/SL values that should be stored locally and whether the
+        position should be treated as having virtual stops.
+        """
+        request = {
+            "action": mt5.TRADE_ACTION_SLTP,
+            "symbol": self.symbol,
+            "position": ticket,
+            "tp": float(tp),
+            "sl": float(sl),
+        }
+
+        result = mt5.order_send(request)
+        invalid_code = getattr(mt5, 'TRADE_RETCODE_INVALID_STOPS', 10016)
+
+        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+            has_virtual_stops = False
+            self.activity_log.log_info(
+                f"Updated TP/SL for position {ticket}: TP={tp:.5f}, SL={sl:.5f}"
+            )
+        else:
+            error = result.comment if result else mt5.last_error()
+            if result and result.retcode == invalid_code:
+                self.activity_log.log_info(
+                    f"Broker rejected TP/SL for position {ticket} with invalid stops ({error}). Retrying with minimum stop distance."
+                )
+
+                symbol_info = mt5.symbol_info(self.symbol)
+                fresh_tick = mt5.symbol_info_tick(self.symbol)
+                if symbol_info and fresh_tick:
+                    point = symbol_info.point
+                    stops_level = max(symbol_info.trade_stops_level, 10)
+                    stop_pips = MIN_STOP_PIPS_PER_ASSET.get(self.symbol, 10)
+                    min_dist = stops_level * point
+                    retry_exec_price = fresh_tick.ask if direction == 'buy' else fresh_tick.bid
+                    retry_check_price = fresh_tick.bid if direction == 'buy' else fresh_tick.ask
+
+                    if direction == 'buy':
+                        retry_tp = retry_exec_price + float(stop_pips) * point
+                        retry_sl = retry_exec_price - float(stop_pips) * point
+                        if retry_tp < retry_check_price + min_dist:
+                            retry_tp = retry_check_price + min_dist
+                        if retry_sl > retry_check_price - min_dist:
+                            retry_sl = retry_check_price - min_dist
+                    else:
+                        retry_tp = retry_exec_price - float(stop_pips) * point
+                        retry_sl = retry_exec_price + float(stop_pips) * point
+                        if retry_tp > retry_check_price - min_dist:
+                            retry_tp = retry_check_price - min_dist
+                        if retry_sl < retry_check_price + min_dist:
+                            retry_sl = retry_check_price + min_dist
+
+                    retry_req = dict(request)
+                    retry_req['tp'] = float(retry_tp)
+                    retry_req['sl'] = float(retry_sl)
+                    retry_res = mt5.order_send(retry_req)
+                    if retry_res and retry_res.retcode == mt5.TRADE_RETCODE_DONE:
+                        tp, sl = float(retry_tp), float(retry_sl)
+                        has_virtual_stops = False
+                        self.activity_log.log_info(
+                            f"Position {ticket} accepted retried TP/SL with minimum stop distance: TP={tp:.5f}, SL={sl:.5f}"
+                        )
+                    else:
+                        retry_error = retry_res.comment if retry_res else mt5.last_error()
+                        self.activity_log.log_error(
+                            f"Anchor TP/SL retry failed for ticket {ticket} ({retry_error}). Using virtual stops instead."
+                        )
+                        has_virtual_stops = True
+                else:
+                    self.activity_log.log_error(
+                        f"Anchor TP/SL failed for ticket {ticket} ({error}). Using virtual stops instead."
+                    )
+                    has_virtual_stops = True
             else:
-                error = result.comment if result else mt5.last_error()
                 self.activity_log.log_error(
                     f"Anchor alignment failed for ticket {ticket} ({direction}): {error}"
                 )
+                has_virtual_stops = True
+
+        info = self.state.ticket_map.get(ticket)
+        if info is not None:
+            info['tp'] = float(tp)
+            info['sl'] = float(sl)
+            info['has_virtual_stops'] = bool(has_virtual_stops)
+
+        if grid_level and ticket in grid_level.positions:
+            grid_level.positions[ticket]['tp'] = float(tp)
+            grid_level.positions[ticket]['sl'] = float(sl)
+            grid_level.positions[ticket]['has_virtual_stops'] = bool(has_virtual_stops)
+
+        return float(tp), float(sl), bool(has_virtual_stops)
 
     #TP/SL detection helpers (Same as old logic)
 
@@ -1648,18 +1741,16 @@ class GridBounceStrategyEngine:
         self.activity_log.log_info(
             f"Broker rejected TP/SL for position {ticket} ({error}). Using virtual TP/SL: TP={tp:.5f}, SL={sl:.5f}"
         )
-        if grid_level:
-            aligned_tp, aligned_sl, _ = await self._align_position_tp_sl(
-                ticket,
-                direction,
-                float(tp),
-                float(sl),
-                grid_level,
-                position_type,
-                has_virtual_stops=True,
-            )
-            return False, float(aligned_tp), float(aligned_sl)
-        return False, float(tp), float(sl)
+        aligned_tp, aligned_sl, _ = await self._align_position_tp_sl(
+            ticket,
+            direction,
+            float(tp),
+            float(sl),
+            grid_level,
+            position_type,
+            has_virtual_stops=True,
+        )
+        return False, float(aligned_tp), float(aligned_sl)
 
     async def _check_virtual_stops(self, ask: float, bid: float):
         """Close positions manually when virtual TP/SL thresholds are hit."""
