@@ -1,5 +1,4 @@
 @echo off
-<<<<<<< HEAD
 :: ============================================================
 :: open_port.bat
 :: Opens an inbound TCP port in Windows Defender Firewall so the
@@ -16,7 +15,7 @@
 =======
 :: Set working directory to the folder containing this script
 cd /d "%~dp0"
->>>>>>> b8a18a68cdcdd98d618176c2c3192e825c4e1120
+
 
 setlocal enabledelayedexpansion
 
@@ -26,7 +25,7 @@ set RULE_NAME=MT5_Bot_Server
 
 :: --- Check for Administrator privileges ---
 net session >nul 2>&1
-<<<<<<< HEAD
+
 if %errorlevel% neq 0 (
     echo.
     echo This script must be run as Administrator.
@@ -39,14 +38,13 @@ if %errorLevel% neq 0 (
     echo Requesting Administrator privileges...
     powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
     exit /b
->>>>>>> b8a18a68cdcdd98d618176c2c3192e825c4e1120
 )
 
 echo.
 echo Configuring firewall for port %PORT% ...
 echo.
 
-<<<<<<< HEAD
+
 :: Remove any old rule with the same name first (avoids duplicate/stale rules)
 netsh advfirewall firewall delete rule name="%RULE_NAME%" >nul 2>&1
 
@@ -90,13 +88,13 @@ if %errorLevel% equ 0 (
 ) else (
     echo.
     echo  ERROR: Could not open the port.
->>>>>>> b8a18a68cdcdd98d618176c2c3192e825c4e1120
     echo.
     pause
     exit /b 1
 )
 
-<<<<<<< HEAD
+
+
 echo Firewall rule added: inbound TCP port %PORT% is now allowed.
 echo.
 echo ------------------------------------------------------------
@@ -135,8 +133,7 @@ if "%PUBLIC_IP%"=="" (
 :found_ip
 
 :: Remove spaces if defined
-if defined PUBLIC_IP set PUBLIC_IP=%PUBLIC_IP: =%
->>>>>>> b8a18a68cdcdd98d618176c2c3192e825c4e1120
+if defined PUBLIC_IP set PUBLIC_IP=%PUBLIC_IP: =% 
 
 echo.
 echo ============================================================
@@ -163,7 +160,6 @@ echo   Note: the public link may stop working if your ISP changes
 echo   your public IP. Consider a dynamic DNS service if so.
 echo ============================================================
 echo.
-<<<<<<< HEAD
 
 pause
 endlocal
@@ -174,4 +170,3 @@ echo.
 echo  =========================================
 echo.
 pause
->>>>>>> b8a18a68cdcdd98d618176c2c3192e825c4e1120
